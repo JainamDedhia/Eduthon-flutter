@@ -13,6 +13,7 @@ import 'screens/student/join_class_screen.dart';
 import 'screens/teacher/teacher_dashboard.dart';
 import 'screens/teacher/create_class_screen.dart';
 import 'screens/teacher/upload_material_screen.dart';
+import 'screens/student/summary_quiz_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,17 +46,18 @@ class MyApp extends StatelessWidget {
         ),
         initialRoute: '/',
         routes: {
-          '/': (context) => const SplashScreen(),
-          '/home': (context) => const HomeScreen(),
-          '/login': (context) => const LoginScreen(),
-          '/register': (context) => const RegisterScreen(),
-          '/role-select': (context) => const RoleSelectScreen(),
-          '/student/dashboard': (context) => const StudentDashboard(),
-          '/student/join-class': (context) => const JoinClassScreen(),
-          '/teacher/dashboard': (context) => const TeacherDashboard(),
-          '/teacher/create-class': (context) => const CreateClassScreen(),
-          '/teacher/upload-material': (context) => const UploadMaterialScreen(),
-        },
+  '/': (context) => const SplashScreen(),
+  '/home': (context) => const HomeScreen(),
+  '/login': (context) => const LoginScreen(),
+  '/register': (context) => const RegisterScreen(),
+  '/role-select': (context) => const RoleSelectScreen(),
+  '/student/dashboard': (context) => const StudentDashboard(),
+  '/student/join-class': (context) => const JoinClassScreen(),
+  '/student/summary-quiz': (context) => const SummaryQuizScreen(),  // NEW!
+  '/teacher/dashboard': (context) => const TeacherDashboard(),
+  '/teacher/create-class': (context) => const CreateClassScreen(),
+  '/teacher/upload-material': (context) => const UploadMaterialScreen(),
+},
       ),
     );
   }

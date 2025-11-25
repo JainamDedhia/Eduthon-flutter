@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -28,11 +29,28 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      // Login and wait for role to be fetched
       await authProvider.login(
         _emailController.text.trim(),
         _passwordController.text,
       );
-      // Navigation handled by SplashScreen logic
+
+      if (!mounted) return;
+
+      // CRITICAL FIX: Navigate based on role after successful login
+      print('🎯 [LoginScreen] Login successful, navigating based on role: ${authProvider.userRole}');
+
+      if (authProvider.userRole == 'teacher') {
+        Navigator.pushReplacementNamed(context, '/teacher/dashboard');
+      } else if (authProvider.userRole == 'student') {
+        Navigator.pushReplacementNamed(context, '/student/dashboard');
+      } else {
+        // Role not found, go to role select screen
+        print('⚠️ [LoginScreen] No role found, going to role select');
+        Navigator.pushReplacementNamed(context, '/role-select');
+      }
+      
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

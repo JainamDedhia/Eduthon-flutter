@@ -173,74 +173,122 @@ class _StudentDashboardState extends State<StudentDashboard> {
   }
 
   // Download material for offline access
-  Future<void> _handleDownloadMaterial(String classCode, ClassMaterial material) async {
-    if (!_isOnline) {
-      _showOfflineError(material.name);
+  // Replace the _handleDownloadMaterial method in student_dashboard.dart
+
+Future<void> _handleDownloadMaterial(String classCode, ClassMaterial material) async {
+  if (!_isOnline) {
+    _showOfflineError(material.name);
+    return;
+  }
+
+  try {
+    final exists = await OfflineDB.checkFileExists(classCode, material.name);
+    if (exists) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('File already downloaded')),
+        );
+      }
       return;
     }
 
-    try {
-      final exists = await OfflineDB.checkFileExists(classCode, material.name);
-      if (exists) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('File already downloaded')),
-          );
-        }
-        return;
-      }
+    if (mounted) {
+      // Show confirmation dialog
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Download for Offline'),
+          content: Text(
+            'Download "${material.name}" with compression to access offline?\n\n'
+            'This will save storage space on your device.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Download'),
+            ),
+          ],
+        ),
+      );
 
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Download for Offline'),
-            content: Text(
-                'Download "${material.name}" with compression to access offline?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(context);
-                  _showLoadingDialog();
-                  try {
-                    await DownloadManager.downloadAndStore(classCode, material);
-                    await _loadStorageStats();
-                    if (mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                '✅ "${material.name}" downloaded successfully!')),
-                      );
-                      setState(() {}); // Refresh UI
-                    }
-                  } catch (e) {
-                    if (mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Download failed: $e')),
-                      );
-                    }
-                  }
-                },
-                child: const Text('Download'),
-              ),
+      if (confirm != true) return;
+    }
+
+    // FIXED: Use a GlobalKey to properly track the dialog
+    if (!mounted) return;
+    
+    // Show loading dialog with proper context management
+    bool isDialogShowing = true;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => WillPopScope(
+        onWillPop: () async => false,
+        child: const AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Downloading and compressing...'),
             ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // Download and store
+      await DownloadManager.downloadAndStore(classCode, material);
+      
+      // Refresh storage stats
+      await _loadStorageStats();
+      
+      // CRITICAL FIX: Close dialog before showing snackbar
+      if (mounted && isDialogShowing) {
+        Navigator.pop(context); // Close loading dialog
+        isDialogShowing = false;
+      }
+      
+      // Force UI refresh
+      if (mounted) {
+        setState(() {});
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ "${material.name}" downloaded successfully!'),
+            backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
+      // Close dialog on error too
+      if (mounted && isDialogShowing) {
+        Navigator.pop(context);
+        isDialogShowing = false;
+      }
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text('Download failed: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
   }
+}
 
   // Delete downloaded file
   Future<void> _handleDeleteFile(FileRecord file) async {
@@ -389,28 +437,57 @@ class _StudentDashboardState extends State<StudentDashboard> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _buildStatItem(_classes.length.toString(), 'Classes'),
-                      const SizedBox(width: 16),
-                      _buildStatItem(
-                        _classes
-                            .fold<int>(0, (sum, c) => sum + c.materials.length)
-                            .toString(),
-                        'Materials',
-                      ),
-                      const SizedBox(width: 16),
-                      _buildStatItem(
-                        _isOnline ? '🌐' : '📴',
-                        _isOnline ? 'Online' : 'Offline',
-                      ),
-                      const SizedBox(width: 16),
-                      _buildStatItem(
-                        '💾',
-                        '${(_storageStats.spaceSaved / 1024 / 1024).toStringAsFixed(0)}MB',
-                      ),
-                    ],
-                  ),
+                  // Add this code to student_dashboard.dart
+// Replace the existing Row with _buildStatItem with this:
+
+Row(
+  children: [
+    _buildStatItem(_classes.length.toString(), 'Classes'),
+    const SizedBox(width: 16),
+    _buildStatItem(
+      _classes
+          .fold<int>(0, (sum, c) => sum + c.materials.length)
+          .toString(),
+      'Materials',
+    ),
+    const SizedBox(width: 16),
+    _buildStatItem(
+      _isOnline ? '🌐' : '📴',
+      _isOnline ? 'Online' : 'Offline',
+    ),
+    const SizedBox(width: 16),
+    _buildStatItem(
+      '💾',
+      '${(_storageStats.spaceSaved / 1024 / 1024).toStringAsFixed(0)}MB',
+    ),
+    const SizedBox(width: 16),
+    // NEW: Summary/Quiz button
+    GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/student/summary-quiz'),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE3F2FD),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.auto_awesome,
+              color: Color(0xFF4A90E2),
+              size: 20,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Summary',
+            style: TextStyle(fontSize: 10, color: Colors.grey),
+          ),
+        ],
+      ),
+    ),
+  ],
+),
                 ],
               ),
             ),

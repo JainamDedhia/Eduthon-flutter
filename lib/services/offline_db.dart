@@ -183,6 +183,76 @@ class OfflineDB {
   }
 
   // Clear all offline files (for debugging)
+  // Save summary and quiz
+  static Future<void> saveSummaryAndQuiz(
+    String classCode,
+    String fileName,
+    String summary,
+    List<Map<String, dynamic>> quiz,
+  ) async {
+    try {
+      print('💾 [offlineDB] Saving summary & quiz for: $fileName');
+
+      final key = 'summary_quiz_${classCode}_$fileName';
+      final data = {
+        'summary': summary,
+        'quiz': quiz,
+        'generatedAt': DateTime.now().toIso8601String(),
+      };
+
+      await prefs.setString(key, jsonEncode(data));
+      print('✅ [offlineDB] Summary & quiz saved: $fileName');
+    } catch (e) {
+      print('❌ [offlineDB] Failed to save summary & quiz: $e');
+      throw Exception('Failed to save: $e');
+    }
+  }
+
+  // Get summary and quiz
+  static Future<Map<String, dynamic>?> getSummaryAndQuiz(
+    String classCode,
+    String fileName,
+  ) async {
+    try {
+      print('📂 [offlineDB] Getting summary & quiz for: $fileName');
+
+      final key = 'summary_quiz_${classCode}_$fileName';
+      final value = prefs.getString(key);
+
+      if (value == null) {
+        print('⚠️ [offlineDB] No summary found for: $fileName');
+        return null;
+      }
+
+      final data = jsonDecode(value) as Map<String, dynamic>;
+      print('✅ [offlineDB] Summary & quiz retrieved: $fileName');
+      return data;
+    } catch (e) {
+      print('❌ [offlineDB] Failed to get summary & quiz: $e');
+      return null;
+    }
+  }
+
+  // Check if summary exists
+  static Future<bool> hasSummary(String classCode, String fileName) async {
+    final key = 'summary_quiz_${classCode}_$fileName';
+    return prefs.containsKey(key);
+  }
+
+  // Delete summary and quiz
+  static Future<void> deleteSummaryAndQuiz(String classCode, String fileName) async {
+    try {
+      print('🗑️ [offlineDB] Deleting summary & quiz for: $fileName');
+      final key = 'summary_quiz_${classCode}_$fileName';
+      await prefs.remove(key);
+      print('✅ [offlineDB] Deleted: $fileName');
+    } catch (e) {
+      print('❌ [offlineDB] Failed to delete summary & quiz: $e');
+      throw Exception('Failed to delete: $e');
+    }
+  }
+
+  // Clear all offline files (for debugging)
   static Future<void> clearAllOfflineFiles() async {
     try {
       final allKeys = prefs.getKeys();
@@ -200,3 +270,5 @@ class OfflineDB {
     }
   }
 }
+
+
