@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import '../../services/offline_db.dart';
 import '../../services/summary_generator.dart';
 import '../../models/models.dart';
+import 'package:provider/provider.dart';
+import '../../services/quiz_sync_service.dart';
+import '../../providers/auth_provider.dart';
 
 class SummaryQuizScreen extends StatefulWidget {
   const SummaryQuizScreen({super.key});
@@ -137,6 +140,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
             fileName: file.name,
             summary: summary,
             quiz: quiz,
+            classCode: file.classCode, // ← PASS THE CLASS CODE HERE
           ),
         ),
       );
@@ -293,12 +297,14 @@ class SummaryQuizResultScreen extends StatefulWidget {
   final String fileName;
   final String summary;
   final List<Map<String, dynamic>> quiz;
+  final String classCode;
 
   const SummaryQuizResultScreen({
     super.key,
     required this.fileName,
     required this.summary,
     required this.quiz,
+    required this.classCode,
   });
 
   @override
@@ -309,6 +315,44 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
   // Track user's answers
   Map<int, String> userAnswers = {};
   bool showResults = false;
+
+  // NEW: Save quiz result method
+  Future<void> _saveQuizResult(int correctAnswers, int totalQuestions) async {
+    try {
+      // Get studentId from AuthProvider
+      final studentId = await Future.microtask(() {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      return auth.currentUser?.uid ?? 'unknown';
+       });
+      
+      final result = QuizResult(
+        studentId: studentId,
+        classCode: widget.classCode,
+        fileName: widget.fileName,
+        score: ((correctAnswers / totalQuestions) * 100).toInt(),
+        totalQuestions: totalQuestions,
+        correctAnswers: correctAnswers,
+        userAnswers: userAnswers,
+        quiz: widget.quiz,
+        completedAt: DateTime.now().toIso8601String(),
+        synced: false,
+      );
+      
+      await QuizSyncService.saveQuizResultLocally(result);
+      print('✅ Quiz result saved and queued for sync: $correctAnswers/$totalQuestions');
+      
+    } catch (e) {
+      print('❌ Failed to save quiz result: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ Result saved locally but sync failed: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+  }
 
   void _submitQuiz() {
     if (userAnswers.length < widget.quiz.length) {
@@ -347,6 +391,9 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
 
     final score = (correct / widget.quiz.length * 100).toStringAsFixed(0);
 
+    // ✅ CRITICAL FIX: Save the quiz result
+    _saveQuizResult(correct, widget.quiz.length);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -366,6 +413,16 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
             Text(
               'You got $correct out of ${widget.quiz.length} correct!',
               style: const TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '✅ Result saved successfully!',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.green,
+                fontWeight: FontWeight.w600,
+              ),
               textAlign: TextAlign.center,
             ),
           ],

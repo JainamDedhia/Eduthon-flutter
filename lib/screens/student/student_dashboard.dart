@@ -7,6 +7,8 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/offline_db.dart';
 import '../../services/download_manager.dart';
+import 'package:claudetest/services/quiz_sync_service.dart';
+
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -28,7 +30,16 @@ class _StudentDashboardState extends State<StudentDashboard> {
     _checkNetwork();
     _loadStorageStats();
     _listenToClasses();
+    _syncQuizResults();
   }
+
+  Future<void> _syncQuizResults() async {
+  try {
+    await QuizSyncService.syncPendingResults();
+  } catch (e) {
+    print('⚠️ Failed to sync quiz results: $e');
+  }
+}
 
   Future<void> _checkNetwork() async {
     final connectivityResult = await Connectivity().checkConnectivity();

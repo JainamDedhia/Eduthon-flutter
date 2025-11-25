@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
+import 'package:claudetest/services/quiz_sync_service.dart';
 
 class OfflineDB {
   static SharedPreferences? _prefs;
@@ -184,6 +185,7 @@ class OfflineDB {
 
   // Clear all offline files (for debugging)
   // Save summary and quiz
+  // Save summary and quiz
   static Future<void> saveSummaryAndQuiz(
     String classCode,
     String fileName,
@@ -252,6 +254,62 @@ class OfflineDB {
     }
   }
 
+  // Save quiz result locally
+  static Future<void> saveQuizResult(dynamic result) async {
+    try {
+      final key = 'quiz_result_${result.studentId}_${result.classCode}_${result.fileName}_${result.completedAt.replaceAll(RegExp(r'[^0-9]'), '')}';
+      await prefs.setString(key, jsonEncode(result.toJson()));
+      print('✅ [offlineDB] Quiz result saved: ${result.fileName}');
+    } catch (e) {
+      print('❌ [offlineDB] Failed to save quiz result: $e');
+      throw Exception('Failed to save quiz result: $e');
+    }
+  }
+
+  // Get all pending (unsynced) quiz results
+  static Future<List<dynamic>> getPendingQuizResults() async {
+    try {
+      final allKeys = prefs.getKeys();
+      final quizKeys = allKeys.where((key) => key.startsWith('quiz_result_')).toList();
+      
+      final results = <dynamic>[];
+      for (final key in quizKeys) {
+        try {
+          final value = prefs.getString(key);
+          if (value != null) {
+            final data = jsonDecode(value);
+            // Only return unsynced results
+            if (data['synced'] != true) {
+              // Import QuizResult from quiz_sync_service.dart
+              final result = QuizResult.fromJson(data);
+              results.add(result);
+            }
+          }
+        } catch (e) {
+          print('⚠️ [offlineDB] Failed to parse quiz result for key $key: $e');
+        }
+      }
+      
+      return results;
+    } catch (e) {
+      print('❌ [offlineDB] Failed to get pending quiz results: $e');
+      return [];
+    }
+  }
+
+  // Mark quiz result as synced
+  static Future<void> markQuizResultAsSynced(dynamic result) async {
+    try {
+      final key = 'quiz_result_${result.studentId}_${result.classCode}_${result.fileName}_${result.completedAt.replaceAll(RegExp(r'[^0-9]'), '')}';
+      final data = result.toJson();
+      data['synced'] = true;
+      await prefs.setString(key, jsonEncode(data));
+      print('✅ [offlineDB] Quiz result marked as synced: ${result.fileName}');
+    } catch (e) {
+      print('❌ [offlineDB] Failed to mark as synced: $e');
+    }
+  }
+
   // Clear all offline files (for debugging)
   static Future<void> clearAllOfflineFiles() async {
     try {
@@ -270,5 +328,4 @@ class OfflineDB {
     }
   }
 }
-
 
