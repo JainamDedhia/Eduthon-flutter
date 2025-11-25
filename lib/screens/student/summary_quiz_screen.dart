@@ -322,7 +322,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       // Get studentId from AuthProvider
       final studentId = await Future.microtask(() {
       final auth = Provider.of<AuthProvider>(context, listen: false);
-      return auth.currentUser?.uid ?? 'unknown';
+      return auth.user?.uid ?? 'unknown';
        });
       
       final result = QuizResult(
