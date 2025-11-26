@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download ML Model for Quiz Generation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 700px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .step {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        
+        .step-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 25px;
+            text-decoration: none;
+            margin: 10px 0;
+            font-weight: bold;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        
+        .success-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+        }
+        
+        ul {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+        
+        li {
+            margin: 8px 0;
+            color: #555;
+        }
+        
+        .status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+            margin: 10px 0;
+        }
+        
+        .status-pending {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+        
+        .status-complete {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 ML Model Setup for Quiz Generation</h1>
+        <p class="subtitle">Download the AI model to enable intelligent quiz generation</p>
+        
+        <div class="info-box">
+            <strong>📦 Model Details:</strong>
+            <ul>
+                <li><strong>Name:</strong> all-MiniLM-L6-v2 (quantized)</li>
+                <li><strong>Size:</strong> ~8MB</li>
+                <li><strong>Type:</strong> Sentence Transformer (BERT-based)</li>
+                <li><strong>Purpose:</strong> Semantic understanding for better quiz distractors</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <div class="step-title">
+                <span class="step-number">1</span>
+                Download the Model File
+            </div>
+            <p style="margin: 10px 0 10px 40px; color: #666;">
+                Click the button below to download the ML model from HuggingFace:
+            </p>
+            <div style="margin-left: 40px;">
+                <a href="https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/all-MiniLM-L6-v2-quant.tflite" 
+                   class="button" 
+                   download="sentence_encoder.tflite">
+                    ⬇️ Download Model (8MB)
+                </a>
+            </div>
+            <div class="warning-box" style="margin: 15px 0 0 40px;">
+                <strong>⚠️ Important:</strong> The file will download as <code>all-MiniLM-L6-v2-quant.tflite</code>. 
+                You need to rename it to <code>sentence_encoder.tflite</code> in the next step.
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-title">
+                <span class="step-number">2</span>
+                Place the Model in the Correct Location
+            </div>
+            <p style="margin: 10px 0 10px 40px; color: #666;">
+                Move the downloaded file to:
+            </p>
+            <div class="code-block" style="margin-left: 40px;">
+Eduthon-flutter\assets\models\sentence_encoder.tflite
+            </div>
+            <p style="margin: 10px 0 10px 40px; color: #666;">
+                Full path:
+            </p>
+            <div class="code-block" style="margin-left: 40px;">
+c:\Users\mohan\Desktop\IIT_Bombay(Hack)\Eduthon-flutter\assets\models\sentence_encoder.tflite
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-title">
+                <span class="step-number">3</span>
+                Verify the Installation
+            </div>
+            <p style="margin: 10px 0 10px 40px; color: #666;">
+                Open PowerShell in the project directory and run:
+            </p>
+            <div class="code-block" style="margin-left: 40px;">
+cd c:\Users\mohan\Desktop\IIT_Bombay(Hack)\Eduthon-flutter
+dir assets\models\sentence_encoder.tflite
+            </div>
+            <p style="margin: 10px 0 10px 40px; color: #666;">
+                You should see a file of approximately <strong>8-9 MB</strong>.
+            </p>
+        </div>
+
+        <div class="step">
+            <div class="step-title">
+                <span class="step-number">4</span>
+                Build and Test
+            </div>
+            <p style="margin: 10px 0 10px 40px; color: #666;">
+                Run the Flutter app:
+            </p>
+            <div class="code-block" style="margin-left: 40px;">
+flutter pub get
+flutter run
+            </div>
+            <p style="margin: 10px 0 10px 40px; color: #666;">
+                Or build the APK:
+            </p>
+            <div class="code-block" style="margin-left: 40px;">
+flutter build apk --release
+            </div>
+        </div>
+
+        <div class="success-box">
+            <strong>✅ When it's working, you'll see these logs:</strong>
+            <div class="code-block" style="margin-top: 10px;">
+🔄 [EnhancedQuizGen] Initializing ML service...
+✅ [MLQuizService] ML model initialized successfully
+🤖 [EnhancedQuizGen] Using ML to rank distractors
+✅ [EnhancedQuizGen] Got 3 ML-ranked distractors
+            </div>
+        </div>
+
+        <div class="info-box">
+            <strong>📚 Documentation:</strong>
+            <ul>
+                <li><strong>ML_MODEL_INTEGRATION_SUMMARY.md</strong> - Quick start guide</li>
+                <li><strong>ML_INTEGRATION_README.md</strong> - Full technical documentation</li>
+                <li><strong>download_model.ps1</strong> - PowerShell download script (alternative method)</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px; padding-top: 30px; border-top: 2px solid #eee;">
+            <p style="color: #667eea; font-weight: bold; font-size: 18px;">
+                🎉 Your quiz generation now has real ML intelligence!
+            </p>
+            <p style="color: #666; margin-top: 10px;">
+                Questions will have semantically related distractors instead of nonsense words.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Add visual feedback when download button is clicked
+        document.querySelector('.button').addEventListener('click', function() {
+            setTimeout(() => {
+                alert('✅ Download started!\n\nRemember to:\n1. Rename the file to: sentence_encoder.tflite\n2. Move it to: assets/models/\n3. Run: flutter pub get');
+            }, 500);
+        });
+    </script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 // FILE: lib/services/enhanced_quiz_generator.dart
 import 'dart:math';
+import 'ml_quiz_service.dart';
 
 /// Enhanced quiz generator with better question quality and distractor generation
 /// This is a significant improvement over the basic rule-based approach
@@ -12,6 +13,13 @@ class EnhancedQuizGenerator {
     if (summary.isEmpty) return [];
 
     print('🎯 [EnhancedQuizGen] Starting enhanced quiz generation...');
+    
+    // Initialize ML service if not already done
+    final mlService = MLQuizService.instance;
+    if (!mlService.isReady) {
+      print('🔄 [EnhancedQuizGen] Initializing ML service...');
+      await mlService.initialize();
+    }
 
     // Split into sentences
     final sentences = summary
@@ -90,8 +98,8 @@ class EnhancedQuizGenerator {
           '_____',
         );
 
-        // Generate smart distractors
-        final distractors = _generateSmartDistractors(
+        // Generate smart distractors (now with ML!)
+        final distractors = await _generateSmartDistractors(
           chosenAnswer,
           sent,
           candidates,
@@ -241,15 +249,42 @@ class EnhancedQuizGenerator {
   }
 
   /// Generate smart distractors based on context and similarity
-  static List<String> _generateSmartDistractors(
+  /// Now ML-enhanced for semantic understanding!
+  static Future<List<String>> _generateSmartDistractors(
     String correctAnswer,
     String context,
     List<String> allCandidates,
     Map<String, double> tfidfScores,
-  ) {
+  ) async {
     final distractors = <String>[];
     final correctLower = correctAnswer.toLowerCase();
     final random = Random();
+    
+    // Strategy 0: ML-powered semantic ranking (if available)
+    final mlService = MLQuizService.instance;
+    if (mlService.isReady) {
+      try {
+        print('🤖 [EnhancedQuizGen] Using ML to rank distractors for: $correctAnswer');
+        final rankedCandidates = await mlService.rankDistractors(
+          correctAnswer: correctAnswer,
+          candidates: allCandidates.where((c) => c.toLowerCase() != correctLower).toList(),
+          context: context,
+        );
+        
+        // Take top ML-ranked candidates
+        if (rankedCandidates.isNotEmpty) {
+          distractors.addAll(rankedCandidates.take(3));
+          print('✅ [EnhancedQuizGen] Got ${distractors.length} ML-ranked distractors');
+          
+          // If we have enough good distractors, return early
+          if (distractors.length >= 3) {
+            return distractors;
+          }
+        }
+      } catch (e) {
+        print('⚠️ [EnhancedQuizGen] ML ranking failed: $e, falling back to TF-IDF');
+      }
+    }
 
     // Strategy 1: Use similar candidates (same length range)
     final similarLength = allCandidates.where((c) {

@@ -61,9 +61,9 @@ dependencies:
   open_file: ^3.5.8
   cupertino_icons: ^1.0.8
   
-  # ML/AI for enhanced quiz generation
-  tflite_flutter: ^0.10.4
-  tflite_flutter_helper: ^0.3.1
+  # ML/AI for enhanced quiz generation (Google ML Kit - actively maintained)
+  google_mlkit_entity_extraction: ^0.11.0
+  google_mlkit_language_id: ^0.10.0
 
 
 dev_dependencies:
@@ -88,6 +88,9 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  # Google ML Kit models are automatically downloaded as needed
+  # No manual asset configuration required!
+  
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
