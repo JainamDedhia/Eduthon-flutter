@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:archive/archive_io.dart';
+import 'enhanced_quiz_generator.dart';
 
 class SummaryGenerator {
   // Extract text from PDF (handles compressed files)
@@ -134,7 +135,7 @@ class SummaryGenerator {
 
     // Step 7: Remove page numbers and year ranges
     text = text.replaceAll(RegExp(r'\bPage\s*\d+\b', caseSensitive: false), ' ');
-    text = text.replaceAll(RegExp(r'\b202\d[-\–]\d{2}\b'), ' ');
+    text = text.replaceAll(RegExp(r'\b202\d[-–]\d{2}\b'), ' ');
 
     // Step 8: Remove numbered bullets at line starts
     text = text.replaceAll(RegExp(r'^\s*\(?[0-9]+(?:\.[0-9]+)*\)?\s*', multiLine: true), ' ');
@@ -409,11 +410,40 @@ class SummaryGenerator {
     return lines.join('\n').trim();
   }
 
-  // Generate MCQ quiz
+  // Generate MCQ quiz - ENHANCED VERSION
   static Future<List<Map<String, dynamic>>> generateQuiz(
     String summary, {
     int numQuestions = 7,
+  })  async {
+    print('🎯 [SummaryGen] Starting quiz generation with enhanced approach...');
+    
+    try {
+      // Use enhanced quiz generator (much better quality)
+      final quiz = await EnhancedQuizGenerator.generateQuiz(
+        summary,
+        numQuestions: numQuestions,
+      );
+      
+      if (quiz.isNotEmpty) {
+        print('✅ [SummaryGen] Enhanced quiz generated: ${quiz.length} questions');
+        return quiz;
+      }
+      
+      print('⚠️ [SummaryGen] Enhanced generator returned empty, trying fallback...');
+    } catch (e) {
+      print('⚠️ [SummaryGen] Enhanced generator error: $e, using fallback...');
+    }
+    
+    // Fallback to old method if enhanced fails
+    return _generateQuizFallback(summary, numQuestions: numQuestions);
+  }
+
+  // OLD quiz generation method (kept as fallback)
+  static Future<List<Map<String, dynamic>>> _generateQuizFallback(
+    String summary, {
+    int numQuestions = 7,
   }) async {
+    print('📝 [Fallback] Using basic quiz generation...');
     if (summary.isEmpty) return [];
 
     final sentences = summary.split(RegExp(r'(?<=[.!?])\s+'))
@@ -427,7 +457,6 @@ class SummaryGenerator {
 
     final mcqs = <Map<String, dynamic>>[];
     final usedAnswers = <String>{};
-    final random = Random();
 
     for (final sent in sentences) {
       if (mcqs.length >= numQuestions) break;
@@ -443,7 +472,6 @@ class SummaryGenerator {
             break;
           }
         } catch (e) {
-          print('⚠️ Regex error for candidate "$cand": $e');
           continue;
         }
       }
@@ -454,32 +482,19 @@ class SummaryGenerator {
         chosen = words.reduce((a, b) => a.length > b.length ? a : b);
       }
 
-      // FIXED: Add null check before using chosen
       if (chosen == null) continue;
 
       try {
         final question = sent.replaceFirst(RegExp(RegExp.escape(chosen), caseSensitive: false), '_____');
 
         final distractors = <String>[];
-        
-        // FIXED: Safe null handling for chosen.toLowerCase()
-        final pool = candidates.where((c) {
-          final chosenLower = chosen!.toLowerCase();
-          final cLower = c.toLowerCase();
-          return cLower != chosenLower;
-        }).toList();
-        
+        final pool = candidates.where((c) => c.toLowerCase() != chosen!.toLowerCase()).toList();
         pool.shuffle();
-        
-        for (final p in pool.take(3)) {
-          distractors.add(p);
-        }
+        distractors.addAll(pool.take(3));
 
         while (distractors.length < 3) {
           final mutated = _mutateWord(chosen);
-          final mutatedLower = mutated.toLowerCase();
-          final chosenLower = chosen.toLowerCase();
-          if (mutatedLower != chosenLower && !distractors.contains(mutated)) {
+          if (mutated.toLowerCase() != chosen.toLowerCase() && !distractors.contains(mutated)) {
             distractors.add(mutated);
           }
         }
@@ -488,7 +503,7 @@ class SummaryGenerator {
         options.shuffle();
 
         final labeled = options.asMap().entries.map((e) => {
-          'label': String.fromCharCode(65 + e.key), // A, B, C, D
+          'label': String.fromCharCode(65 + e.key),
           'text': e.value,
         }).toList();
 
@@ -496,23 +511,21 @@ class SummaryGenerator {
           (item) => item['text'] == chosen,
           orElse: () => labeled.last,
         );
-        final correctLabel = correctOption['label'] as String;
 
         mcqs.add({
           'question': question.trim(),
           'options': labeled,
-          'answer_label': correctLabel,
+          'answer_label': correctOption['label'],
           'answer_text': chosen,
         });
 
         usedAnswers.add(chosen.toLowerCase());
       } catch (e) {
-        print('⚠️ Error creating quiz for sentence: $e');
         continue;
       }
     }
 
-    print('✅ Generated ${mcqs.length} quiz questions');
+    print('✅ Generated ${mcqs.length} quiz questions (fallback)');
     return mcqs;
   }
 
@@ -536,7 +549,6 @@ class SummaryGenerator {
       final stops = {'therefore', 'however', 'because', 'throughout', 'between', 'including'};
       return candidates.where((c) => !stops.contains(c.toLowerCase())).toList();
     } catch (e) {
-      print('⚠️ Error finding candidate phrases: $e');
       return [];
     }
   }

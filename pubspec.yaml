@@ -60,6 +60,11 @@ dependencies:
   url_launcher: ^6.3.1
   open_file: ^3.5.8
   cupertino_icons: ^1.0.8
+  
+  # ML/AI for enhanced quiz generation
+  tflite_flutter: ^0.10.4
+  tflite_flutter_helper: ^0.3.1
+
 
 dev_dependencies:
   flutter_test:
