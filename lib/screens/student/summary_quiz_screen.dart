@@ -6,8 +6,9 @@ import '../../models/models.dart';
 import 'package:provider/provider.dart';
 import '../../services/quiz_sync_service.dart';
 import '../../providers/auth_provider.dart';
+import 'package:claudetest/services/llm_summary_service.dart';
 
-class SummaryQuizScreen extends StatefulWidget {
+class SummaryQuizScreen extends StatefulWidget {  
   const SummaryQuizScreen({super.key});
 
   @override
@@ -44,6 +45,45 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   }
 
   Future<void> _generateSummaryAndQuiz(FileRecord file) async {
+    // Check if model is available
+    final modelAvailable = await LLMSummaryService.isModelAvailable();
+    
+    String? selectedLanguage;
+    
+    // If model available, show language selector
+    if (modelAvailable && mounted) {
+      selectedLanguage = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.language, color: Color(0xFF4A90E2)),
+              SizedBox(width: 8),
+              Text('Select Language'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '🤖 AI Model detected!\nChoose summary language:',
+                style: TextStyle(fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
+              const SizedBox(height: 12),
+              _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
+              const SizedBox(height: 12),
+              _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
+            ],
+          ),
+        ),
+      );
+      
+      if (selectedLanguage == null) return; // User cancelled
+    }
+
     setState(() {
       _processingFile = file.name;
       _progress = 0.0;
@@ -51,6 +91,11 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
 
     try {
       print('🔄 Starting summary & quiz generation for: ${file.name}');
+      if (modelAvailable) {
+        print('🤖 Using LLM model in language: $selectedLanguage');
+      } else {
+        print('📝 Using basic script (no model)');
+      }
 
       // Step 1: Extract text from PDF (20%)
       setState(() => _progress = 0.2);
@@ -61,15 +106,41 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
       }
       print('✅ Text extracted: ${text.length} characters');
 
-      // Step 2: Generate summary (50%)
-      setState(() => _progress = 0.5);
-      final summary = await SummaryGenerator.generateSummary(text);
-      print('✅ Summary generated: ${summary.length} characters');
+      String summary;
+      List<Map<String, dynamic>> quiz;
 
-      // Step 3: Generate quiz (80%)
-      setState(() => _progress = 0.8);
-      final quiz = await SummaryGenerator.generateQuiz(summary);
-      print('✅ Quiz generated: ${quiz.length} questions');
+      if (modelAvailable && selectedLanguage != null) {
+        // USE LLM MODEL (Enhanced + Multilingual)
+        
+        // Step 2: Generate summary with LLM (50%)
+        setState(() => _progress = 0.5);
+        summary = await LLMSummaryService.generateSummaryWithLLM(
+          text: text,
+          language: selectedLanguage,
+        );
+        print('✅ LLM Summary generated: ${summary.length} characters');
+
+        // Step 3: Generate quiz with LLM (80%)
+        setState(() => _progress = 0.8);
+        quiz = await LLMSummaryService.generateQuizWithLLM(
+          summary: summary,
+          language: selectedLanguage,
+          numQuestions: 5,
+        );
+        print('✅ LLM Quiz generated: ${quiz.length} questions');
+      } else {
+        // USE BASIC SCRIPT (No model - fallback)
+        
+        // Step 2: Generate summary with script (50%)
+        setState(() => _progress = 0.5);
+        summary = await SummaryGenerator.generateSummary(text);
+        print('✅ Basic summary generated: ${summary.length} characters');
+
+        // Step 3: Generate quiz with script (80%)
+        setState(() => _progress = 0.8);
+        quiz = await SummaryGenerator.generateQuiz(summary);
+        print('✅ Basic quiz generated: ${quiz.length} questions');
+      }
 
       // Step 4: Save locally (100%)
       setState(() => _progress = 1.0);
@@ -84,7 +155,11 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ Generated summary & ${quiz.length} questions!'),
+            content: Text(
+              modelAvailable 
+                ? '✅ Generated with AI Model! ${quiz.length} questions'
+                : '✅ Generated summary & ${quiz.length} questions!',
+            ),
             backgroundColor: Colors.green,
           ),
         );
@@ -105,6 +180,33 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
         _progress = 0.0;
       });
     }
+  }
+  
+  Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
+    return InkWell(
+      onTap: () => Navigator.pop(context, code),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F2FD),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF4A90E2)),
+        ),
+        child: Row(
+          children: [
+            Text(flag, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _viewResults(FileRecord file) async {

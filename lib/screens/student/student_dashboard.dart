@@ -456,9 +456,7 @@ Row(
     _buildStatItem(_classes.length.toString(), 'Classes'),
     const SizedBox(width: 16),
     _buildStatItem(
-      _classes
-          .fold<int>(0, (sum, c) => sum + c.materials.length)
-          .toString(),
+      _classes.fold<int>(0, (sum, c) => sum + c.materials.length).toString(),
       'Materials',
     ),
     const SizedBox(width: 16),
@@ -472,7 +470,10 @@ Row(
       '${(_storageStats.spaceSaved / 1024 / 1024).toStringAsFixed(0)}MB',
     ),
     const SizedBox(width: 16),
-    // NEW: Summary/Quiz button
+
+    // ---------------------------
+    // NEW: Summary Button (unchanged)
+    // ---------------------------
     GestureDetector(
       onTap: () => Navigator.pushNamed(context, '/student/summary-quiz'),
       child: Column(
@@ -497,8 +498,39 @@ Row(
         ],
       ),
     ),
+
+    const SizedBox(width: 16),
+
+    // ---------------------------
+    // NEW: AI MODEL Button you requested
+    // ---------------------------
+    GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/student/model-download'),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE3F2FD),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.smart_toy,
+              color: Color(0xFF4A90E2),
+              size: 20,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'AI Model',
+            style: TextStyle(fontSize: 10),
+          ),
+        ],
+      ),
+    ),
   ],
 ),
+
                 ],
               ),
             ),
