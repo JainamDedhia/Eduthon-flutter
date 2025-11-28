@@ -1,0 +1,929 @@
+// FILE: lib/screens/student/summary_quiz_screen.dart
+// REPLACE THE ENTIRE FILE WITH THIS VERSION
+
+import 'package:flutter/material.dart';
+import '../../services/summary_generator.dart';
+import '../../services/mind_map_generator.dart';
+import '../../models/models.dart';
+import 'package:provider/provider.dart';
+import '../../services/quiz_sync_service.dart';
+import '../../providers/auth_provider.dart';
+import 'package:claudetest/services/llm_summary_service.dart';
+import 'package:claudetest/services/offline_db.dart';
+
+class SummaryQuizScreen extends StatefulWidget {  
+  const SummaryQuizScreen({super.key});
+
+  @override
+  State<SummaryQuizScreen> createState() => _SummaryQuizScreenState();
+}
+
+class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
+  List<FileRecord> _offlineFiles = [];
+  bool _loading = true;
+  String? _processingFile;
+  double _progress = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOfflineFiles();
+  }
+
+  Future<void> _loadOfflineFiles() async {
+    setState(() => _loading = true);
+    try {
+      final files = await OfflineDB.getAllOfflineFiles();
+      final pdfFiles = files.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
+      setState(() {
+        _offlineFiles = pdfFiles;
+        _loading = false;
+      });
+      print('✅ Loaded ${pdfFiles.length} offline PDFs');
+    } catch (e) {
+      print('❌ Error loading offline files: $e');
+      setState(() => _loading = false);
+    }
+  }
+
+  // UPDATED: Now also generates mind map
+  Future<void> _generateSummaryQuizAndMindMap(FileRecord file) async {
+    final modelAvailable = await LLMSummaryService.isModelAvailable();
+    
+    String? selectedLanguage;
+    
+    if (modelAvailable && mounted) {
+      selectedLanguage = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.language, color: Color(0xFF4A90E2)),
+              SizedBox(width: 8),
+              Text('Select Language'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '🤖 AI Model detected!\nChoose summary language:',
+                style: TextStyle(fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
+              const SizedBox(height: 12),
+              _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
+              const SizedBox(height: 12),
+              _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
+            ],
+          ),
+        ),
+      );
+      
+      if (selectedLanguage == null) return;
+    }
+
+    setState(() {
+      _processingFile = file.name;
+      _progress = 0.0;
+    });
+
+    try {
+      print('🔄 Starting generation for: ${file.name}');
+
+      // Step 1: Extract text (15%)
+      setState(() => _progress = 0.15);
+      final text = await SummaryGenerator.extractTextFromPDF(file.localPath);
+      
+      if (text.isEmpty) {
+        throw Exception('Could not extract text from PDF');
+      }
+
+      String summary;
+      List<Map<String, dynamic>> quiz;
+
+      if (modelAvailable && selectedLanguage != null) {
+        // LLM path
+        setState(() => _progress = 0.4);
+        summary = await LLMSummaryService.generateSummaryWithLLM(
+          text: text,
+          language: selectedLanguage,
+        );
+
+        setState(() => _progress = 0.65);
+        quiz = await LLMSummaryService.generateQuizWithLLM(
+          summary: summary,
+          language: selectedLanguage,
+          numQuestions: 5,
+        );
+      } else {
+        // Script path
+        setState(() => _progress = 0.4);
+        summary = await SummaryGenerator.generateSummary(text);
+
+        setState(() => _progress = 0.65);
+        quiz = await SummaryGenerator.generateQuiz(summary);
+      }
+
+      // Step 4: Generate Mind Map (85%)
+      setState(() => _progress = 0.85);
+      print('🧠 Generating mind map...');
+      
+      final mindMap = await MindMapGenerator.generateMindMap(
+        summary: summary,
+        quiz: quiz,
+        fileName: file.name,
+      );
+
+      // Step 5: Save everything (100%)
+      setState(() => _progress = 1.0);
+      
+      await OfflineDB.saveSummaryAndQuiz(
+        file.classCode,
+        file.name,
+        summary,
+        quiz,
+      );
+
+      await OfflineDB.saveMindMap(
+        file.classCode,
+        file.name,
+        mindMap.toJson(),
+      );
+
+      print('✅ Summary, Quiz, and Mind Map saved');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              modelAvailable 
+                ? '✅ Generated with AI! Summary, Quiz & Mind Map ready!'
+                : '✅ Summary, Quiz & Mind Map generated!',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _processingFile = null;
+        _progress = 0.0;
+      });
+    }
+  }
+  
+  Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
+    return InkWell(
+      onTap: () => Navigator.pop(context, code),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F2FD),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF4A90E2)),
+        ),
+        child: Row(
+          children: [
+            Text(flag, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _viewResults(FileRecord file) async {
+    try {
+      final result = await OfflineDB.getSummaryAndQuiz(file.classCode, file.name);
+      final mindMapData = await OfflineDB.getMindMap(file.classCode, file.name);
+      
+      if (result == null) {
+        throw Exception('No summary found. Generate it first!');
+      }
+
+      final summary = result['summary'] as String;
+      final quizRaw = result['quiz'] as List<dynamic>;
+      
+      final quiz = quizRaw.map((item) {
+        if (item is Map<String, dynamic>) {
+          return item;
+        } else if (item is Map) {
+          return Map<String, dynamic>.from(item);
+        } else {
+          throw Exception('Invalid quiz data format');
+        }
+      }).toList();
+
+      // Parse mind map if available
+      MindMapNode? mindMap;
+      if (mindMapData != null) {
+        try {
+          final mindMapJson = mindMapData['mindmap'] as Map<String, dynamic>;
+          mindMap = MindMapNode.fromJson(mindMapJson);
+        } catch (e) {
+          print('⚠️ Failed to parse mind map: $e');
+        }
+      }
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SummaryQuizResultScreen(
+            fileName: file.name,
+            summary: summary,
+            quiz: quiz,
+            classCode: file.classCode,
+            mindMap: mindMap,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('❌ Error viewing results: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('📚 Summary, Quiz & Mind Map'),
+        backgroundColor: const Color(0xFF4A90E2),
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _offlineFiles.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.folder_open, size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No offline PDFs found',
+                        style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Download some materials first!',
+                        style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                      ),
+                    ],
+                  ),
+                )
+              : Column(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      color: const Color(0xFFE3F2FD),
+                      child: const Text(
+                        '💡 Generate AI-powered summary, quiz & mind map from PDFs',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF1976D2),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+
+                    if (_processingFile != null)
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        color: Colors.amber[50],
+                        child: Column(
+                          children: [
+                            Text(
+                              'Processing: $_processingFile',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 12),
+                            LinearProgressIndicator(
+                              value: _progress,
+                              backgroundColor: Colors.grey[300],
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                Color(0xFF4A90E2),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${(_progress * 100).toInt()}%',
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _offlineFiles.length,
+                        itemBuilder: (context, index) =>
+                            _buildFileCard(_offlineFiles[index]),
+                      ),
+                    ),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildFileCard(FileRecord file) {
+    final isProcessing = _processingFile == file.name;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: Icon(
+          Icons.picture_as_pdf,
+          color: isProcessing ? Colors.orange : const Color(0xFF4A90E2),
+          size: 32,
+        ),
+        title: Text(
+          file.name,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          'Class: ${file.classCode}',
+          style: const TextStyle(fontSize: 12),
+        ),
+        trailing: isProcessing
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.visibility, color: Colors.green),
+                    tooltip: 'View Results',
+                    onPressed: () => _viewResults(file),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.auto_awesome, color: Color(0xFF4A90E2)),
+                    tooltip: 'Generate All',
+                    onPressed: () => _generateSummaryQuizAndMindMap(file),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+// UPDATED Result Screen with Mind Map Tab
+class SummaryQuizResultScreen extends StatefulWidget {
+  final String fileName;
+  final String summary;
+  final List<Map<String, dynamic>> quiz;
+  final String classCode;
+  final MindMapNode? mindMap;
+
+  const SummaryQuizResultScreen({
+    super.key,
+    required this.fileName,
+    required this.summary,
+    required this.quiz,
+    required this.classCode,
+    this.mindMap,
+  });
+
+  @override
+  State<SummaryQuizResultScreen> createState() => _SummaryQuizResultScreenState();
+}
+
+class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
+  Map<int, String> userAnswers = {};
+  bool showResults = false;
+
+  Future<void> _saveQuizResult(int correctAnswers, int totalQuestions) async {
+    try {
+      final studentId = await Future.microtask(() {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      return auth.user?.uid ?? 'unknown';
+       });
+      
+      final result = QuizResult(
+        studentId: studentId,
+        classCode: widget.classCode,
+        fileName: widget.fileName,
+        score: ((correctAnswers / totalQuestions) * 100).toInt(),
+        totalQuestions: totalQuestions,
+        correctAnswers: correctAnswers,
+        userAnswers: userAnswers,
+        quiz: widget.quiz,
+        completedAt: DateTime.now().toIso8601String(),
+        synced: false,
+      );
+      
+      await QuizSyncService.saveQuizResultLocally(result);
+      print('✅ Quiz result saved: $correctAnswers/$totalQuestions');
+      
+    } catch (e) {
+      print('❌ Failed to save quiz result: $e');
+    }
+  }
+
+  void _submitQuiz() {
+    if (userAnswers.length < widget.quiz.length) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('⚠️ Incomplete Quiz'),
+          content: Text(
+            'You have answered ${userAnswers.length} out of ${widget.quiz.length} questions.\n\n'
+            'Please answer all questions before submitting.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      showResults = true;
+    });
+
+    int correct = 0;
+    for (int i = 0; i < widget.quiz.length; i++) {
+      final question = widget.quiz[i];
+      final correctAnswer = question['answer_label'] as String;
+      if (userAnswers[i] == correctAnswer) {
+        correct++;
+      }
+    }
+
+    final score = (correct / widget.quiz.length * 100).toStringAsFixed(0);
+    _saveQuizResult(correct, widget.quiz.length);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🎉 Quiz Complete!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '$score%',
+              style: const TextStyle(
+                fontSize: 48,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF4A90E2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'You got $correct out of ${widget.quiz.length} correct!',
+              style: const TextStyle(fontSize: 16),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                showResults = false;
+                userAnswers.clear();
+              });
+            },
+            child: const Text('Retry'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: widget.mindMap != null ? 3 : 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.fileName),
+          backgroundColor: const Color(0xFF4A90E2),
+          bottom: TabBar(
+            tabs: [
+              const Tab(icon: Icon(Icons.notes), text: 'Summary'),
+              const Tab(icon: Icon(Icons.quiz), text: 'Quiz'),
+              if (widget.mindMap != null)
+                const Tab(icon: Icon(Icons.account_tree), text: 'Mind Map'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _buildSummaryTab(),
+            _buildQuizTab(),
+            if (widget.mindMap != null) _buildMindMapTab(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '📝 Summary',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.summary,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuizTab() {
+    return widget.quiz.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.quiz_outlined, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No quiz questions generated',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          )
+        : Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: const Color(0xFFE3F2FD),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${userAnswers.length}/${widget.quiz.length} answered',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (!showResults)
+                      ElevatedButton(
+                        onPressed: _submitQuiz,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF66BB6A),
+                        ),
+                        child: const Text('Submit Quiz'),
+                      ),
+                  ],
+                ),
+              ),
+              
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: widget.quiz.length,
+                  itemBuilder: (context, index) => _buildQuizCard(widget.quiz[index], index),
+                ),
+              ),
+            ],
+          );
+  }
+
+  Widget _buildMindMapTab() {
+    if (widget.mindMap == null) {
+      return const Center(child: Text('No mind map available'));
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.account_tree, color: Color(0xFF4A90E2), size: 28),
+                  SizedBox(width: 12),
+                  Text(
+                    '🧠 Mind Map',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildMindMapTree(widget.mindMap!),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMindMapTree(MindMapNode node) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildMindMapNode(node),
+        if (node.children.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Padding(
+            padding: EdgeInsets.only(left: node.level == 0 ? 20.0 : 30.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: node.children
+                  .map((child) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildMindMapTree(child),
+                      ))
+                  .toList(),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMindMapNode(MindMapNode node) {
+    final colors = [
+      const Color(0xFF4A90E2), // Blue - Root
+      const Color(0xFF66BB6A), // Green - Level 1
+      const Color(0xFFFF7043), // Orange - Level 2
+    ];
+
+    final color = colors[node.level.clamp(0, colors.length - 1)];
+    
+    final fontSizes = [20.0, 16.0, 14.0];
+    final fontSize = fontSizes[node.level.clamp(0, fontSizes.length - 1)];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color, width: 2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            node.level == 0
+                ? Icons.center_focus_strong
+                : node.level == 1
+                    ? Icons.folder
+                    : Icons.label,
+            color: color,
+            size: fontSize + 4,
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              node.title,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: node.level == 0 
+                    ? FontWeight.bold 
+                    : node.level == 1
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizCard(Map<String, dynamic> q, int index) {
+    try {
+      final question = q['question'] as String? ?? 'Question unavailable';
+      final answerLabel = q['answer_label'] as String? ?? 'A';
+      final answerText = q['answer_text'] as String? ?? '';
+      
+      final optionsRaw = q['options'];
+      List<Map<String, dynamic>> options = [];
+      
+      if (optionsRaw is List) {
+        options = optionsRaw.map((opt) {
+          if (opt is Map<String, dynamic>) {
+            return opt;
+          } else if (opt is Map) {
+            return Map<String, dynamic>.from(opt);
+          } else {
+            return {'label': 'X', 'text': 'Invalid option'};
+          }
+        }).toList();
+      }
+
+      final userAnswer = userAnswers[index];
+
+      return Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Q${index + 1}. $question',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              ...options.map((opt) {
+                final label = opt['label'] as String? ?? '?';
+                final text = opt['text'] as String? ?? 'Option unavailable';
+                final isSelected = userAnswer == label;
+                final isCorrect = label == answerLabel;
+                
+                Color? backgroundColor;
+                Color? textColor;
+                
+                if (showResults) {
+                  if (isCorrect) {
+                    backgroundColor = Colors.green[100];
+                    textColor = Colors.green[900];
+                  } else if (isSelected && !isCorrect) {
+                    backgroundColor = Colors.red[100];
+                    textColor = Colors.red[900];
+                  }
+                } else if (isSelected) {
+                  backgroundColor = const Color(0xFFE3F2FD);
+                  textColor = const Color(0xFF1976D2);
+                }
+                
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: showResults ? null : () {
+                      setState(() {
+                        userAnswers[index] = label;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: backgroundColor ?? Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected 
+                            ? const Color(0xFF4A90E2) 
+                            : Colors.grey[300]!,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: showResults && isCorrect 
+                                ? Colors.green 
+                                : isSelected 
+                                  ? const Color(0xFF4A90E2) 
+                                  : Colors.grey[300],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              label,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: (showResults && isCorrect) || isSelected 
+                                  ? Colors.white 
+                                  : Colors.black87,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              text,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                color: textColor,
+                              ),
+                            ),
+                          ),
+                          if (showResults && isCorrect)
+                            const Icon(Icons.check_circle, color: Colors.green),
+                          if (showResults && isSelected && !isCorrect)
+                            const Icon(Icons.cancel, color: Colors.red),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              
+              if (showResults)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lightbulb, color: Colors.green, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Correct Answer: $answerLabel - $answerText',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.green,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      return Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'Error displaying question ${index + 1}',
+            style: const TextStyle(color: Colors.red),
+          ),
+        ),
+      );
+    }
+  }
+}
