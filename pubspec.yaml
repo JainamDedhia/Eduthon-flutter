@@ -43,6 +43,8 @@ dependencies:
   http: ^1.2.2
   dio: ^5.7.0
   
+  #onboarding
+  tutorial_coach_mark: ^1.2.11
   # PDF handling
   syncfusion_flutter_pdf: ^28.1.33
   
