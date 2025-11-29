@@ -11,58 +11,70 @@ class TTSService {
   bool _isInitialized = false;
   bool _isSpeaking = false;
   bool _isPaused = false;
+  String _currentLanguage = 'en-US'; // Default language
   
-  // 🆕 ADD: Completion handler management
   VoidCallback? _onCompletionCallback;
 
   // Getters
   bool get isSpeaking => _isSpeaking;
   bool get isPaused => _isPaused;
+  String get currentLanguage => _currentLanguage;
 
-  // 🆕 UPDATED: Set completion handler method
+  // Language codes mapping
+  static const Map<String, String> languageCodes = {
+    'en': 'en-US',  // English
+    'hi': 'hi-IN',  // Hindi
+    'mr': 'mr-IN',  // Marathi
+  };
+
+  // Language names for display
+  static const Map<String, String> languageNames = {
+    'en': 'English',
+    'hi': 'हिंदी (Hindi)',
+    'mr': 'मराठी (Marathi)',
+  };
+
   void setOnCompletionHandler(VoidCallback onComplete) {
     _onCompletionCallback = onComplete;
   }
 
-  // 🆕 ADD: Clear completion handler
   void clearCompletionHandler() {
     _onCompletionCallback = null;
   }
 
-  // Initialize TTS - 🆕 UPDATED with proper completion handler
+  // Initialize TTS
   Future<void> initialize() async {
     if (_isInitialized) return;
 
     try {
       // Configure TTS
-      await _flutterTts.setLanguage("en-US");
-      await _flutterTts.setSpeechRate(0.5); // Normal speed (0.0 - 1.0)
-      await _flutterTts.setVolume(1.0); // Max volume
-      await _flutterTts.setPitch(1.0); // Normal pitch
+      await _flutterTts.setLanguage(_currentLanguage);
+      await _flutterTts.setSpeechRate(0.5);
+      await _flutterTts.setVolume(1.0);
+      await _flutterTts.setPitch(1.0);
 
-      // Set up handlers - 🆕 UPDATED completion handler
+      // Set up handlers
       _flutterTts.setStartHandler(() {
         _isSpeaking = true;
         _isPaused = false;
-        print('🔊 [TTS] Started speaking');
+        print('🔊 [TTS] Started speaking in $_currentLanguage');
       });
 
       _flutterTts.setCompletionHandler(() {
         _isSpeaking = false;
         _isPaused = false;
         print('✅ [TTS] Completed speaking');
-        // 🆕 CALL THE COMPLETION CALLBACK IF SET
         if (_onCompletionCallback != null) {
           print('🔄 [TTS] Calling completion callback');
           _onCompletionCallback!();
-          _onCompletionCallback = null; // Reset after calling
+          _onCompletionCallback = null;
         }
       });
 
       _flutterTts.setCancelHandler(() {
         _isSpeaking = false;
         _isPaused = false;
-        _onCompletionCallback = null; // 🆕 Clear callback on cancel
+        _onCompletionCallback = null;
         print('⏹️ [TTS] Cancelled');
       });
 
@@ -79,7 +91,7 @@ class TTSService {
       _flutterTts.setErrorHandler((msg) {
         _isSpeaking = false;
         _isPaused = false;
-        _onCompletionCallback = null; // 🆕 Clear callback on error
+        _onCompletionCallback = null;
         print('❌ [TTS] Error: $msg');
       });
 
@@ -91,8 +103,55 @@ class TTSService {
     }
   }
 
-  // Speak text - 🆕 UPDATED to handle completion properly
-  Future<void> speak(String text) async {
+  // 🆕 NEW: Set TTS language
+  Future<void> setTTSLanguage(String languageCode) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    try {
+      final ttsCode = languageCodes[languageCode] ?? 'en-US';
+      await _flutterTts.setLanguage(ttsCode);
+      _currentLanguage = ttsCode;
+      print('🌐 [TTS] Language set to: $ttsCode ($languageCode)');
+    } catch (e) {
+      print('❌ [TTS] Failed to set language: $e');
+      // Fallback to English
+      await _flutterTts.setLanguage('en-US');
+      _currentLanguage = 'en-US';
+    }
+  }
+
+  // 🆕 NEW: Set language for reading (convenience method)
+  Future<void> setLanguageForReading(String languageCode) async {
+    if (!_isInitialized) await initialize();
+    
+    String ttsLanguage;
+    switch (languageCode) {
+      case 'hi':
+        ttsLanguage = 'hi-IN'; // Hindi
+        break;
+      case 'mr':
+        ttsLanguage = 'mr-IN'; // Marathi
+        break;
+      default:
+        ttsLanguage = 'en-US'; // English
+    }
+    
+    try {
+      await _flutterTts.setLanguage(ttsLanguage);
+      _currentLanguage = ttsLanguage;
+      print('🌐 [TTS] Language set to: $ttsLanguage');
+    } catch (e) {
+      print('❌ [TTS] Language set error: $e');
+      // Fallback to English
+      await _flutterTts.setLanguage('en-US');
+      _currentLanguage = 'en-US';
+    }
+  }
+
+  // Speak text with optional language override
+  Future<void> speak(String text, {String? languageCode}) async {
     if (!_isInitialized) {
       await initialize();
     }
@@ -103,13 +162,18 @@ class TTSService {
     }
 
     try {
-      // Stop any ongoing speech and clear previous callback
+      // Stop any ongoing speech
       if (_isSpeaking) {
         await stop();
         await Future.delayed(Duration(milliseconds: 200));
       }
 
-      print('🔊 [TTS] Speaking: ${text.substring(0, text.length > 50 ? 50 : text.length)}...');
+      // Set language if specified
+      if (languageCode != null) {
+        await setLanguageForReading(languageCode);
+      }
+
+      print('🔊 [TTS] Speaking in $_currentLanguage: ${text.substring(0, text.length > 50 ? 50 : text.length)}...');
       await _flutterTts.speak(text);
     } catch (e) {
       print('❌ [TTS] Speak error: $e');
@@ -117,7 +181,7 @@ class TTSService {
     }
   }
 
-  // Stop speaking - 🆕 UPDATED to clear callback
+  // Stop speaking
   Future<void> stop() async {
     if (!_isInitialized) return;
 
@@ -125,7 +189,7 @@ class TTSService {
       await _flutterTts.stop();
       _isSpeaking = false;
       _isPaused = false;
-      _onCompletionCallback = null; // 🆕 Clear callback on stop
+      _onCompletionCallback = null;
       print('⏹️ [TTS] Stopped');
     } catch (e) {
       print('❌ [TTS] Stop error: $e');
@@ -150,7 +214,6 @@ class TTSService {
 
     try {
       // Note: Some platforms don't support resume
-      // Fall back to stop and restart if needed
       print('▶️ [TTS] Attempting resume...');
       // Most platforms don't support true resume, so we'll just continue
     } catch (e) {
@@ -213,16 +276,27 @@ class TTSService {
     
     try {
       await _flutterTts.setLanguage(language);
+      _currentLanguage = language;
       print('🌐 [TTS] Language set to: $language');
     } catch (e) {
       print('❌ [TTS] Set language error: $e');
     }
   }
 
-  // Dispose - 🆕 UPDATED to clear callback
+  // Dispose
   Future<void> dispose() async {
     await stop();
-    _onCompletionCallback = null; // 🆕 Clear callback on dispose
+    _onCompletionCallback = null;
     print('🗑️ [TTS] Disposed');
+  }
+
+  // 🆕 NEW: Get language name for display
+  static String getLanguageName(String code) {
+    return languageNames[code] ?? 'English';
+  }
+
+  // 🆕 NEW: Get all supported languages
+  static Map<String, String> getSupportedLanguages() {
+    return languageNames;
   }
 }

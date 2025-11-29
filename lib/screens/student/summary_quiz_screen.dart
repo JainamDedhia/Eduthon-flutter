@@ -655,6 +655,9 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
   bool _isTTSSpeaking = false;
   bool _isSTTListening = false;
   int? _currentQuestionIndex; // Track which question is being read for voice input
+  
+  // 🆕 ADD: Language selection state variable
+  String _selectedLanguage = 'en'; // Default English
 
   @override
   void initState() {
@@ -790,14 +793,96 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
   }
 
-  // 🆕 ADD: Toggle TTS for summary
+  // 🆕 ADD: Show language selection dialog
+  Future<String?> _showLanguageSelectionDialog() async {
+    return await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.language, color: Color(0xFF4A90E2)),
+            SizedBox(width: 8),
+            Text('Select Reading Language'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '🔊 Choose language for Text-to-Speech',
+              style: TextStyle(fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
+            const SizedBox(height: 12),
+            _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
+            const SizedBox(height: 12),
+            _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
+    return InkWell(
+      onTap: () => Navigator.pop(context, code),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F2FD),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF4A90E2)),
+        ),
+        child: Row(
+          children: [
+            Text(flag, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🆕 ADD: Helper method to get language name
+  String _getLanguageName(String code) {
+    switch (code) {
+      case 'hi': return 'Hindi (हिंदी)';
+      case 'mr': return 'Marathi (मराठी)';
+      default: return 'English';
+    }
+  }
+
+  // 🆕 UPDATED: Toggle TTS for summary with language selection
   Future<void> _toggleSummaryTTS() async {
     if (_isTTSSpeaking) {
       await _ttsService.stop();
       setState(() => _isTTSSpeaking = false);
     } else {
-      setState(() => _isTTSSpeaking = true);
+      // 🆕 ADDED: Ask for language before reading
+      final language = await _showLanguageSelectionDialog();
+      if (language == null) return; // User cancelled
+      
+      setState(() {
+        _selectedLanguage = language;
+        _isTTSSpeaking = true;
+      });
+      
+      // Set TTS language
+      await _ttsService.setLanguageForReading(language);
+      
+      // Speak summary
       await _ttsService.speak(widget.summary);
+      
       // Update state after completion
       await Future.delayed(Duration(milliseconds: 500));
       if (mounted && !_ttsService.isSpeaking) {
@@ -806,38 +891,47 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     }
   }
 
-  // FIXED _handleVoiceQuiz method for summary_quiz_screen.dart
+  // 🆕 UPDATED: Handle voice quiz with language selection
   Future<void> _handleVoiceQuiz(int questionIndex) async {
-  if (_isSTTListening) {
-    // Stop current listening
-    await _sttService.stopListening();
-    setState(() {
-      _isSTTListening = false;
-      _currentQuestionIndex = null;
-    });
-    return;
-  }
+    if (_isSTTListening) {
+      // Stop current listening
+      await _sttService.stopListening();
+      setState(() {
+        _isSTTListening = false;
+        _currentQuestionIndex = null;
+      });
+      return;
+    }
 
-  final question = widget.quiz[questionIndex];
-  final questionText = question['question'] as String? ?? '';
-  final options = question['options'] as List<dynamic>? ?? [];
+    // 🆕 ADDED: Ask for language before reading quiz
+    final language = await _showLanguageSelectionDialog();
+    if (language == null) return; // User cancelled
+    
+    setState(() => _selectedLanguage = language);
+    
+    // Set TTS language
+    await _ttsService.setLanguageForReading(language);
 
-  // Build TTS text
-  String ttsText = 'Question ${questionIndex + 1}. $questionText. ';
-  
-  for (final opt in options) {
-    final label = opt['label'] as String? ?? '';
-    final text = opt['text'] as String? ?? '';
-    ttsText += 'Option $label: $text. ';
-  }
+    final question = widget.quiz[questionIndex];
+    final questionText = question['question'] as String? ?? '';
+    final options = question['options'] as List<dynamic>? ?? [];
 
-  ttsText += 'Please say your answer: A, B, C, or D.';
+    // Build TTS text
+    String ttsText = 'Question ${questionIndex + 1}. $questionText. ';
+    
+    for (final opt in options) {
+      final label = opt['label'] as String? ?? '';
+      final text = opt['text'] as String? ?? '';
+      ttsText += 'Option $label: $text. ';
+    }
 
-  try {
-    setState(() {
-      _isTTSSpeaking = true;
-      _currentQuestionIndex = questionIndex;
-    });
+    ttsText += 'Please say your answer: A, B, C, or D.';
+
+    try {
+      setState(() {
+        _isTTSSpeaking = true;
+        _currentQuestionIndex = questionIndex;
+      });
 
     // ✅ PROPER FIX: Use completion callback instead of timing
     _ttsService.setOnCompletionHandler(() {
@@ -855,71 +949,71 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     
     // 🚫 DON'T put any STT code here! It will wait for completion callback
     
-  } catch (e) {
-    print('❌ [VoiceQuiz] Error: $e');
-    _resetVoiceState();
-  }
-}
-
-// 🆕 ADD: Separate method for starting STT
-Future<void> _startSTTForQuestion(int questionIndex) async {
-  if (!mounted || _currentQuestionIndex != questionIndex) return;
-  
-  // Check if STT is available
-  final sttAvailable = await _sttService.isAvailable();
-  if (!sttAvailable) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Speech recognition not available'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    } catch (e) {
+      print('❌ [VoiceQuiz] Error: $e');
+      _resetVoiceState();
     }
-    _resetVoiceState();
-    return;
   }
 
-  // Start listening for answer
-  setState(() {
-    _isSTTListening = true;
-    _isTTSSpeaking = false;
-  });
-
-  print('🎤 [VoiceQuiz] Starting STT after TTS finished...');
-  
-  await _sttService.startListening(
-    onResult: (recognizedWords) {
-      _handleVoiceAnswer(questionIndex, recognizedWords);
-    },
-  );
-
-  // Auto-stop after 10 seconds
-  Future.delayed(Duration(seconds: 10), () {
-    if (mounted && _isSTTListening && _currentQuestionIndex == questionIndex) {
-      _sttService.stopListening();
-      setState(() {
-        _isSTTListening = false;
-        _currentQuestionIndex = null;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('⏱️ Voice input timed out'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+  // 🆕 ADD: Separate method for starting STT
+  Future<void> _startSTTForQuestion(int questionIndex) async {
+    if (!mounted || _currentQuestionIndex != questionIndex) return;
+    
+    // Check if STT is available
+    final sttAvailable = await _sttService.isAvailable();
+    if (!sttAvailable) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Speech recognition not available'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      _resetVoiceState();
+      return;
     }
-  });
-}
 
-// 🆕 ADD: Reset voice state
-void _resetVoiceState() {
-  setState(() {
-    _isTTSSpeaking = false;
-    _isSTTListening = false;
-    _currentQuestionIndex = null;
-  });
-}
+    // Start listening for answer
+    setState(() {
+      _isSTTListening = true;
+      _isTTSSpeaking = false;
+    });
+
+    print('🎤 [VoiceQuiz] Starting STT after TTS finished...');
+    
+    await _sttService.startListening(
+      onResult: (recognizedWords) {
+        _handleVoiceAnswer(questionIndex, recognizedWords);
+      },
+    );
+
+    // Auto-stop after 10 seconds
+    Future.delayed(Duration(seconds: 10), () {
+      if (mounted && _isSTTListening && _currentQuestionIndex == questionIndex) {
+        _sttService.stopListening();
+        setState(() {
+          _isSTTListening = false;
+          _currentQuestionIndex = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⏱️ Voice input timed out'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    });
+  }
+
+  // 🆕 ADD: Reset voice state
+  void _resetVoiceState() {
+    setState(() {
+      _isTTSSpeaking = false;
+      _isSTTListening = false;
+      _currentQuestionIndex = null;
+    });
+  }
 
   // 🆕 ADD: Handle voice answer
   void _handleVoiceAnswer(int questionIndex, String recognizedWords) {
@@ -1010,7 +1104,7 @@ void _resetVoiceState() {
     );
   }
 
-  // 🆕 UPDATED: Summary tab with TTS button
+  // 🆕 UPDATED: Summary tab with TTS button and language badge
   Widget _buildSummaryTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1020,16 +1114,29 @@ void _resetVoiceState() {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with TTS button
+              // Header with TTS button and language badge
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    '📝 Summary',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '📝 Summary',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      if (_selectedLanguage != 'en') // Show selected language
+                        Text(
+                          '🌐 Reading in: ${_getLanguageName(_selectedLanguage)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                    ],
                   ),
                   // 🆕 ADD: TTS Button
                   IconButton(
