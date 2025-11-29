@@ -1,4 +1,5 @@
 // FILE: lib/services/tts_service.dart
+import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
 class TTSService {
@@ -10,12 +11,25 @@ class TTSService {
   bool _isInitialized = false;
   bool _isSpeaking = false;
   bool _isPaused = false;
+  
+  // 🆕 ADD: Completion handler management
+  VoidCallback? _onCompletionCallback;
 
   // Getters
   bool get isSpeaking => _isSpeaking;
   bool get isPaused => _isPaused;
 
-  // Initialize TTS
+  // 🆕 UPDATED: Set completion handler method
+  void setOnCompletionHandler(VoidCallback onComplete) {
+    _onCompletionCallback = onComplete;
+  }
+
+  // 🆕 ADD: Clear completion handler
+  void clearCompletionHandler() {
+    _onCompletionCallback = null;
+  }
+
+  // Initialize TTS - 🆕 UPDATED with proper completion handler
   Future<void> initialize() async {
     if (_isInitialized) return;
 
@@ -26,7 +40,7 @@ class TTSService {
       await _flutterTts.setVolume(1.0); // Max volume
       await _flutterTts.setPitch(1.0); // Normal pitch
 
-      // Set up handlers
+      // Set up handlers - 🆕 UPDATED completion handler
       _flutterTts.setStartHandler(() {
         _isSpeaking = true;
         _isPaused = false;
@@ -37,11 +51,18 @@ class TTSService {
         _isSpeaking = false;
         _isPaused = false;
         print('✅ [TTS] Completed speaking');
+        // 🆕 CALL THE COMPLETION CALLBACK IF SET
+        if (_onCompletionCallback != null) {
+          print('🔄 [TTS] Calling completion callback');
+          _onCompletionCallback!();
+          _onCompletionCallback = null; // Reset after calling
+        }
       });
 
       _flutterTts.setCancelHandler(() {
         _isSpeaking = false;
         _isPaused = false;
+        _onCompletionCallback = null; // 🆕 Clear callback on cancel
         print('⏹️ [TTS] Cancelled');
       });
 
@@ -58,6 +79,7 @@ class TTSService {
       _flutterTts.setErrorHandler((msg) {
         _isSpeaking = false;
         _isPaused = false;
+        _onCompletionCallback = null; // 🆕 Clear callback on error
         print('❌ [TTS] Error: $msg');
       });
 
@@ -69,7 +91,7 @@ class TTSService {
     }
   }
 
-  // Speak text
+  // Speak text - 🆕 UPDATED to handle completion properly
   Future<void> speak(String text) async {
     if (!_isInitialized) {
       await initialize();
@@ -81,7 +103,7 @@ class TTSService {
     }
 
     try {
-      // Stop any ongoing speech
+      // Stop any ongoing speech and clear previous callback
       if (_isSpeaking) {
         await stop();
         await Future.delayed(Duration(milliseconds: 200));
@@ -95,7 +117,7 @@ class TTSService {
     }
   }
 
-  // Stop speaking
+  // Stop speaking - 🆕 UPDATED to clear callback
   Future<void> stop() async {
     if (!_isInitialized) return;
 
@@ -103,6 +125,7 @@ class TTSService {
       await _flutterTts.stop();
       _isSpeaking = false;
       _isPaused = false;
+      _onCompletionCallback = null; // 🆕 Clear callback on stop
       print('⏹️ [TTS] Stopped');
     } catch (e) {
       print('❌ [TTS] Stop error: $e');
@@ -196,9 +219,10 @@ class TTSService {
     }
   }
 
-  // Dispose
+  // Dispose - 🆕 UPDATED to clear callback
   Future<void> dispose() async {
     await stop();
+    _onCompletionCallback = null; // 🆕 Clear callback on dispose
     print('🗑️ [TTS] Disposed');
   }
 }

@@ -676,6 +676,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
   @override
   void dispose() {
     // Stop TTS when leaving screen
+     _ttsService.clearCompletionHandler();
     _ttsService.stop();
     _sttService.dispose();
     super.dispose();
@@ -805,110 +806,120 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     }
   }
 
-  // 🆕 ADD: Read quiz question with options using TTS + activate STT
+  // FIXED _handleVoiceQuiz method for summary_quiz_screen.dart
   Future<void> _handleVoiceQuiz(int questionIndex) async {
-    if (_isSTTListening) {
-      // Stop current listening
-      await _sttService.stopListening();
-      setState(() {
-        _isSTTListening = false;
-        _currentQuestionIndex = null;
-      });
-      return;
-    }
-
-    final question = widget.quiz[questionIndex];
-    final questionText = question['question'] as String? ?? '';
-    final options = question['options'] as List<dynamic>? ?? [];
-
-    // Build TTS text
-    String ttsText = 'Question ${questionIndex + 1}. $questionText. ';
-    
-    for (final opt in options) {
-      final label = opt['label'] as String? ?? '';
-      final text = opt['text'] as String? ?? '';
-      ttsText += 'Option $label: $text. ';
-    }
-
-    ttsText += 'Please say your answer: A, B, C, or D.';
-
-    try {
-      setState(() {
-        _isTTSSpeaking = true;
-        _currentQuestionIndex = questionIndex;
-      });
-
-      // Speak the question and options
-      await _ttsService.speak(ttsText);
-
-      // Wait for TTS to finish
-      await Future.delayed(Duration(milliseconds: 500));
-      
-      // Check if STT is available
-      final sttAvailable = await _sttService.isAvailable();
-      if (!sttAvailable) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Speech recognition not available'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        setState(() {
-          _isTTSSpeaking = false;
-          _currentQuestionIndex = null;
-        });
-        return;
-      }
-
-      // Start listening for answer
-      setState(() {
-        _isSTTListening = true;
-        _isTTSSpeaking = false;
-      });
-
-      await _sttService.startListening(
-        onResult: (recognizedWords) {
-          _handleVoiceAnswer(questionIndex, recognizedWords);
-        },
-      );
-
-      // Auto-stop after 10 seconds
-      Future.delayed(Duration(seconds: 10), () {
-        if (mounted && _isSTTListening && _currentQuestionIndex == questionIndex) {
-          _sttService.stopListening();
-          setState(() {
-            _isSTTListening = false;
-            _currentQuestionIndex = null;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('⏱️ Voice input timed out'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      });
-
-    } catch (e) {
-      print('❌ [VoiceQuiz] Error: $e');
-      setState(() {
-        _isTTSSpeaking = false;
-        _isSTTListening = false;
-        _currentQuestionIndex = null;
-      });
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Voice quiz error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+  if (_isSTTListening) {
+    // Stop current listening
+    await _sttService.stopListening();
+    setState(() {
+      _isSTTListening = false;
+      _currentQuestionIndex = null;
+    });
+    return;
   }
+
+  final question = widget.quiz[questionIndex];
+  final questionText = question['question'] as String? ?? '';
+  final options = question['options'] as List<dynamic>? ?? [];
+
+  // Build TTS text
+  String ttsText = 'Question ${questionIndex + 1}. $questionText. ';
+  
+  for (final opt in options) {
+    final label = opt['label'] as String? ?? '';
+    final text = opt['text'] as String? ?? '';
+    ttsText += 'Option $label: $text. ';
+  }
+
+  ttsText += 'Please say your answer: A, B, C, or D.';
+
+  try {
+    setState(() {
+      _isTTSSpeaking = true;
+      _currentQuestionIndex = questionIndex;
+    });
+
+    // ✅ PROPER FIX: Use completion callback instead of timing
+    _ttsService.setOnCompletionHandler(() {
+      print('✅ [VoiceQuiz] TTS ACTUALLY finished, now starting STT');
+      
+      // Check if still on the same question
+      if (!mounted || _currentQuestionIndex != questionIndex) return;
+      
+      // Start STT after TTS truly finishes
+      _startSTTForQuestion(questionIndex);
+    });
+
+    // Start speaking - DON'T await this!
+    await _ttsService.speak(ttsText);
+    
+    // 🚫 DON'T put any STT code here! It will wait for completion callback
+    
+  } catch (e) {
+    print('❌ [VoiceQuiz] Error: $e');
+    _resetVoiceState();
+  }
+}
+
+// 🆕 ADD: Separate method for starting STT
+Future<void> _startSTTForQuestion(int questionIndex) async {
+  if (!mounted || _currentQuestionIndex != questionIndex) return;
+  
+  // Check if STT is available
+  final sttAvailable = await _sttService.isAvailable();
+  if (!sttAvailable) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Speech recognition not available'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    _resetVoiceState();
+    return;
+  }
+
+  // Start listening for answer
+  setState(() {
+    _isSTTListening = true;
+    _isTTSSpeaking = false;
+  });
+
+  print('🎤 [VoiceQuiz] Starting STT after TTS finished...');
+  
+  await _sttService.startListening(
+    onResult: (recognizedWords) {
+      _handleVoiceAnswer(questionIndex, recognizedWords);
+    },
+  );
+
+  // Auto-stop after 10 seconds
+  Future.delayed(Duration(seconds: 10), () {
+    if (mounted && _isSTTListening && _currentQuestionIndex == questionIndex) {
+      _sttService.stopListening();
+      setState(() {
+        _isSTTListening = false;
+        _currentQuestionIndex = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('⏱️ Voice input timed out'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  });
+}
+
+// 🆕 ADD: Reset voice state
+void _resetVoiceState() {
+  setState(() {
+    _isTTSSpeaking = false;
+    _isSTTListening = false;
+    _currentQuestionIndex = null;
+  });
+}
 
   // 🆕 ADD: Handle voice answer
   void _handleVoiceAnswer(int questionIndex, String recognizedWords) {
