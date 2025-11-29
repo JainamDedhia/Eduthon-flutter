@@ -62,6 +62,9 @@ dependencies:
   flutter_tts: ^4.2.0
   speech_to_text: ^7.0.0
   permission_handler: ^11.3.1
+
+  #google ml kit
+  google_mlkit_translation: ^0.13.0
   
   # URL launcher
   url_launcher: ^6.3.1

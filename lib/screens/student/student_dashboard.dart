@@ -8,7 +8,6 @@ import '../../providers/auth_provider.dart';
 import '../../services/offline_db.dart';
 import '../../services/download_manager.dart';
 import 'package:claudetest/services/quiz_sync_service.dart';
-// ADD THESE IMPORTS at the top of student_dashboard.dart (after existing imports)
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import '../../services/onboarding_service.dart';
 
@@ -27,7 +26,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
   StorageStats _storageStats = StorageStats.empty();
   int _currentTab = 0; // Bottom nav index
 
-  // 🆕 ADD THESE GlobalKeys for onboarding targets
+  // GlobalKeys for onboarding targets
   final GlobalKey _joinClassKey = GlobalKey();
   final GlobalKey _firstClassCardKey = GlobalKey(); // Only for first class card
   final GlobalKey _firstDownloadButtonKey = GlobalKey(); // Only for first download button
@@ -44,13 +43,12 @@ class _StudentDashboardState extends State<StudentDashboard> {
     _listenToClasses();
     _syncQuizResults();
     
-    // 🆕 ADD: Initialize onboarding after first frame
+    // Initialize onboarding after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndShowOnboarding();
     });
   }
 
-  // 🆕 ADD: New method to check and show onboarding
   Future<void> _checkAndShowOnboarding() async {
     final completed = await OnboardingService.isStudentDashboardCompleted();
     if (!completed && mounted) {
@@ -66,7 +64,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
     }
   }
 
-  // 🆕 ADD: Create onboarding tutorial
   void _showOnboarding() {
     final targets = <TargetFocus>[];
     
@@ -184,7 +181,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
     _tutorialCoachMark?.show(context: context);
   }
 
-  // 🆕 ADD: Build onboarding content widget
   Widget _buildOnboardingContent({
     required IconData icon,
     required String title,
@@ -289,13 +285,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  // 🆕 ADD: Skip onboarding handler
   void _skipOnboarding(TutorialCoachMarkController controller) {
     controller.skip();
     OnboardingService.markStudentDashboardCompleted();
   }
 
-  // 🆕 ADD: Finish onboarding handler
   void _finishOnboarding(TutorialCoachMarkController controller) {
     controller.next();
     OnboardingService.markStudentDashboardCompleted();
@@ -643,7 +637,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
       body: _buildBody(),
       bottomNavigationBar: _buildBottomNav(),
       
-      // 🆕 ADD THIS: Floating action button for Join Class
+      // Floating action button for Join Class
       floatingActionButton: _currentTab == 0 && _classes.isEmpty
           ? FloatingActionButton.extended(
               key: _joinClassKey,
@@ -664,10 +658,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
       case 0:
         return _buildClassesTab();
       case 1:
-        return _buildMaterialsTab();
-      case 2:
         return _buildAIToolsTab();
-      case 3:
+      case 2:
         return _buildSettingsTab();
       default:
         return _buildClassesTab();
@@ -753,10 +745,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  // 🆕 UPDATED: Added index parameter to only apply key to first card
   Widget _buildSimpleClassCard(ClassModel classModel, int index) {
     return Card(
-      key: index == 0 ? _firstClassCardKey : null, // 🆕 ONLY apply to first card
+      key: index == 0 ? _firstClassCardKey : null, // ONLY apply to first card
       margin: EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 3,
@@ -855,7 +846,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  // 🆕 FIXED: Key is now on the DOWNLOAD button (when file is NOT downloaded)
   Widget _buildMaterialRow(String classCode, ClassMaterial material, int materialIndex) {
     return FutureBuilder<bool>(
       future: _isMaterialDownloaded(classCode, material.name),
@@ -894,7 +884,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
                 )
               else if (_isOnline)
                 IconButton(
-                  key: materialIndex == 0 ? _firstDownloadButtonKey : null, // 🆕 FIXED: Key on DOWNLOAD button
+                  key: materialIndex == 0 ? _firstDownloadButtonKey : null, // Key on DOWNLOAD button
                   icon: Icon(Icons.download, size: 20, color: Color(0xFF4A90E2)),
                   onPressed: () => _handleDownloadMaterial(classCode, material),
                   padding: EdgeInsets.zero,
@@ -936,12 +926,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  // 📚 TAB 2: STUDY MATERIALS
-  Widget _buildMaterialsTab() {
-    return Center(child: Text('Materials Tab - Coming in next update'));
-  }
-
-  // 🤖 TAB 3: AI TOOLS
+  // 🤖 TAB 2: AI TOOLS
   Widget _buildAIToolsTab() {
     return SafeArea(
       child: SingleChildScrollView(
@@ -1044,7 +1029,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  // ⚙️ TAB 4: SETTINGS
+  // ⚙️ TAB 3: SETTINGS
   Widget _buildSettingsTab() {
     final authProvider = Provider.of<AuthProvider>(context);
     
@@ -1187,15 +1172,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
             label: 'Classes',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.folder, size: 28),
-            label: 'Materials',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.auto_awesome, size: 28, key: _aiToolsTabKey), // 🆕 ADD KEY
+            icon: Icon(Icons.auto_awesome, size: 28, key: _aiToolsTabKey),
             label: 'AI Tools',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings, size: 28, key: _settingsTabKey), // 🆕 ADD KEY
+            icon: Icon(Icons.settings, size: 28, key: _settingsTabKey),
             label: 'Settings',
           ),
         ],

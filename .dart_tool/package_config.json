@@ -218,6 +218,18 @@
       "languageVersion": "3.7"
     },
     {
+      "name": "google_mlkit_commons",
+      "rootUri": "file:///C:/Users/Acer/AppData/Local/Pub/Cache/hosted/pub.dev/google_mlkit_commons-0.11.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.16"
+    },
+    {
+      "name": "google_mlkit_translation",
+      "rootUri": "file:///C:/Users/Acer/AppData/Local/Pub/Cache/hosted/pub.dev/google_mlkit_translation-0.13.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.16"
+    },
+    {
       "name": "http",
       "rootUri": "file:///C:/Users/Acer/AppData/Local/Pub/Cache/hosted/pub.dev/http-1.6.0",
       "packageUri": "lib/",
@@ -674,7 +686,7 @@
       "languageVersion": "3.7"
     }
   ],
-  "generated": "2025-11-29T15:23:34.511908Z",
+  "generated": "2025-11-29T18:03:53.353491Z",
   "generator": "pub",
   "generatorVersion": "3.7.2",
   "flutterRoot": "file:///C:/Users/Acer/Downloads/flutter_windows_3.29.3-stable/flutter",

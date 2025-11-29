@@ -8,11 +8,11 @@ import '../../services/quiz_sync_service.dart';
 import '../../providers/auth_provider.dart';
 import 'package:claudetest/services/llm_summary_service.dart';
 import 'package:claudetest/services/offline_db.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart'; // 🆕 ADD
-import '../../services/onboarding_service.dart'; // 🆕 ADD
-// 🆕 ADD: TTS & STT services
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../../services/onboarding_service.dart';
 import '../../services/tts_service.dart';
 import '../../services/stt_service.dart';
+import '../../services/translation_service.dart';
 
 class SummaryQuizScreen extends StatefulWidget {  
   const SummaryQuizScreen({super.key});
@@ -27,24 +27,29 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   String? _processingFile;
   double _progress = 0.0;
   
-  // 🆕 ADD: Onboarding keys
   final GlobalKey _fileListKey = GlobalKey();
   final GlobalKey _firstGenerateButtonKey = GlobalKey();
   final GlobalKey _firstViewButtonKey = GlobalKey();
   TutorialCoachMark? _tutorialCoachMark;
+
+  final TranslationService _translationService = TranslationService();
 
   @override
   void initState() {
     super.initState();
     _loadOfflineFiles();
     
-    // 🆕 ADD: Initialize onboarding
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndShowOnboarding();
     });
   }
 
-  // 🆕 ADD: Check and show onboarding
+  @override
+  void dispose() {
+    _translationService.dispose();
+    super.dispose();
+  }
+
   Future<void> _checkAndShowOnboarding() async {
     final completed = await OnboardingService.isSummaryQuizCompleted();
     if (!completed && mounted && _offlineFiles.isNotEmpty) {
@@ -55,59 +60,34 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     }
   }
 
-  // 🆕 ADD: Create onboarding tutorial
   void _showOnboarding() {
     final targets = <TargetFocus>[];
+  
+  targets.add(
+    TargetFocus(
+      identify: "generate_button",
+      keyTarget: _firstGenerateButtonKey,
+      alignSkip: Alignment.topRight,
+      enableOverlayTab: true,
+      paddingFocus: 3, // ✅ REDUCED for buttons (even smaller)
+      radius: 8, // ✅ ADD smaller radius for buttons
+      contents: [
+        TargetContent(
+          align: ContentAlign.top,
+          builder: (context, controller) {
+            return _buildOnboardingContent(
+              icon: Icons.auto_awesome,
+              title: '✨ Generate AI Content',
+              description: 'Tap this button to create:\n• Summary\n• Quiz questions\n• Mind map',
+              onNext: () => controller.next(),
+              onSkip: () => _skipOnboarding(controller),
+            );
+          },
+        ),
+      ],
+    ),
+  );
     
-    // Target 1: File List
-    targets.add(
-      TargetFocus(
-        identify: "file_list",
-        keyTarget: _fileListKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.bottom,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.picture_as_pdf,
-                title: '📄 Your PDFs',
-                description: 'These are your downloaded PDF files.\nSelect any to generate summary & quiz!',
-                onNext: () => controller.next(),
-                onSkip: () => _skipOnboarding(controller),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    // Target 2: Generate Button
-    targets.add(
-      TargetFocus(
-        identify: "generate_button",
-        keyTarget: _firstGenerateButtonKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.auto_awesome,
-                title: '✨ Generate AI Content',
-                description: 'Tap this button to create:\n• Summary\n• Quiz questions\n• Mind map',
-                onNext: () => controller.next(),
-                onSkip: () => _skipOnboarding(controller),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    // Target 3: View Button
     targets.add(
       TargetFocus(
         identify: "view_button",
@@ -149,8 +129,1041 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     _tutorialCoachMark?.show(context: context);
   }
 
-  // 🆕 ADD: Onboarding content widget
   Widget _buildOnboardingContent({
+    required IconData icon,
+    required String title,
+    required String description,
+    required VoidCallback onNext,
+    required VoidCallback onSkip,
+    bool isLast = false,
+  }) {
+  return Container(
+    padding: EdgeInsets.all(16), // 🆕 REDUCED from 20 to 16
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black26,
+          blurRadius: 10,
+          offset: Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // 🆕 FIX: Smaller circle container
+        Container(
+          padding: EdgeInsets.all(12), // 🆕 REDUCED from 16 to 12
+          decoration: BoxDecoration(
+            color: Color(0xFF4A90E2).withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 36, color: Color(0xFF4A90E2)), // 🆕 REDUCED from 48 to 36
+        ),
+        SizedBox(height: 12), // 🆕 REDUCED from 16 to 12
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 18, // 🆕 REDUCED from 22 to 18
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        SizedBox(height: 8), // 🆕 REDUCED from 12 to 8
+        Text(
+          description,
+          style: TextStyle(
+            fontSize: 13, // 🆕 REDUCED from 16 to 13
+            color: Colors.black54,
+            height: 1.4, // 🆕 REDUCED from 1.5 to 1.4
+          ),
+          textAlign: TextAlign.center,
+        ),
+        SizedBox(height: 16), // 🆕 REDUCED from 24 to 16
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            TextButton(
+              onPressed: onSkip,
+              child: Text(
+                'Skip',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]), // 🆕 REDUCED font
+              ),
+            ),
+            ElevatedButton(
+              onPressed: onNext,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF4A90E2),
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8), // 🆕 REDUCED padding
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                isLast ? '✓ Got it!' : 'Next →',
+                style: TextStyle(
+                  fontSize: 13, // 🆕 REDUCED from 16 to 13
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+  void _skipOnboarding(TutorialCoachMarkController controller) {
+    controller.skip();
+    OnboardingService.markSummaryQuizCompleted();
+  }
+
+  void _finishOnboarding(TutorialCoachMarkController controller) {
+    controller.next();
+    OnboardingService.markSummaryQuizCompleted();
+  }
+
+  Future<void> _loadOfflineFiles() async {
+    setState(() => _loading = true);
+    try {
+      final files = await OfflineDB.getAllOfflineFiles();
+      final pdfFiles = files.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
+      setState(() {
+        _offlineFiles = pdfFiles;
+        _loading = false;
+      });
+      print('✅ Loaded ${pdfFiles.length} offline PDFs');
+    } catch (e) {
+      print('❌ Error loading offline files: $e');
+      setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _generateSummaryQuizAndMindMap(FileRecord file) async {
+    final modelAvailable = await LLMSummaryService.isModelAvailable();
+    
+    String? selectedLanguage;
+    
+    if (modelAvailable && mounted) {
+      selectedLanguage = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.language, color: Color(0xFF4A90E2)),
+              SizedBox(width: 8),
+              Text('Select Language'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '🤖 AI Model detected!\nChoose summary language:',
+                style: TextStyle(fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
+              const SizedBox(height: 12),
+              _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
+              const SizedBox(height: 12),
+              _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
+            ],
+          ),
+        ),
+      );
+      
+      if (selectedLanguage == null) return;
+    }
+
+    setState(() {
+      _processingFile = file.name;
+      _progress = 0.0;
+    });
+
+    try {
+      print('🔄 Starting generation for: ${file.name}');
+
+      setState(() => _progress = 0.15);
+      final text = await SummaryGenerator.extractTextFromPDF(file.localPath);
+      
+      if (text.isEmpty) {
+        throw Exception('Could not extract text from PDF');
+      }
+
+      String summary;
+      List<Map<String, dynamic>> quiz;
+
+      if (modelAvailable && selectedLanguage != null) {
+        setState(() => _progress = 0.4);
+        summary = await LLMSummaryService.generateSummaryWithLLM(
+          text: text,
+          language: selectedLanguage,
+        );
+
+        setState(() => _progress = 0.65);
+        quiz = await LLMSummaryService.generateQuizWithLLM(
+          summary: summary,
+          language: selectedLanguage,
+          numQuestions: 5,
+        );
+      } else {
+        setState(() => _progress = 0.4);
+        summary = await SummaryGenerator.generateSummary(text);
+
+        setState(() => _progress = 0.65);
+        quiz = await SummaryGenerator.generateQuiz(summary);
+      }
+
+      setState(() => _progress = 0.85);
+      print('🧠 Generating mind map...');
+      
+      final mindMap = await MindMapGenerator.generateMindMap(
+        summary: summary,
+        quiz: quiz,
+        fileName: file.name,
+      );
+
+      setState(() => _progress = 1.0);
+      
+      await OfflineDB.saveSummaryAndQuiz(
+        file.classCode,
+        file.name,
+        summary,
+        quiz,
+      );
+
+      await OfflineDB.saveMindMap(
+        file.classCode,
+        file.name,
+        mindMap.toJson(),
+      );
+
+      print('✅ Summary, Quiz, and Mind Map saved');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              modelAvailable 
+                ? '✅ Generated with AI! Summary, Quiz & Mind Map ready!'
+                : '✅ Summary, Quiz & Mind Map generated!',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('❌ Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _processingFile = null;
+        _progress = 0.0;
+      });
+    }
+  }
+  
+  Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
+    return InkWell(
+      onTap: () => Navigator.pop(context, code),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F2FD),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF4A90E2)),
+        ),
+        child: Row(
+          children: [
+            Text(flag, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _viewResults(FileRecord file) async {
+    try {
+      final result = await OfflineDB.getSummaryAndQuiz(file.classCode, file.name);
+      final mindMapData = await OfflineDB.getMindMap(file.classCode, file.name);
+      
+      if (result == null) {
+        throw Exception('No summary found. Generate it first!');
+      }
+
+      final language = await _showLanguageSelectionDialog();
+      if (language == null) return;
+
+      String summary = result['summary'] as String;
+      final quizRaw = result['quiz'] as List<dynamic>;
+      
+      List<Map<String, dynamic>> quiz = quizRaw.map((item) {
+        if (item is Map<String, dynamic>) {
+          return item;
+        } else if (item is Map) {
+          return Map<String, dynamic>.from(item);
+        } else {
+          throw Exception('Invalid quiz data format');
+        }
+      }).toList();
+
+      if (language != 'en') {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => WillPopScope(
+            onWillPop: () async => false,
+            child: AlertDialog(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 20),
+                  Text(
+                    'Translating to ${TranslationService.getLanguageName(language)}...',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+        try {
+          summary = await _translationService.translate(summary, language);
+          
+          for (int i = 0; i < quiz.length; i++) {
+            final question = quiz[i]['question'] as String? ?? '';
+            quiz[i]['question'] = await _translationService.translate(question, language);
+            
+            final options = quiz[i]['options'] as List<dynamic>? ?? [];
+            for (int j = 0; j < options.length; j++) {
+              final optMap = options[j] as Map<String, dynamic>;
+              final optText = optMap['text'] as String? ?? '';
+              optMap['text'] = await _translationService.translate(optText, language);
+            }
+            
+            final answerText = quiz[i]['answer_text'] as String? ?? '';
+            quiz[i]['answer_text'] = await _translationService.translate(answerText, language);
+          }
+          
+          print('✅ [ViewResults] All content translated to $language');
+        } catch (e) {
+          print('❌ [ViewResults] Translation error: $e');
+          if (mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Translation failed. Showing in English.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+        }
+        
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      }
+
+      MindMapNode? mindMap;
+      if (mindMapData != null) {
+        try {
+          final mindMapJson = mindMapData['mindmap'] as Map<String, dynamic>;
+          mindMap = MindMapNode.fromJson(mindMapJson);
+        } catch (e) {
+          print('⚠️ Failed to parse mind map: $e');
+        }
+      }
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SummaryQuizResultScreen(
+            fileName: file.name,
+            summary: summary,
+            quiz: quiz,
+            classCode: file.classCode,
+            mindMap: mindMap,
+            selectedLanguage: language,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('❌ Error viewing results: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  Future<String?> _showLanguageSelectionDialog() async {
+    return await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.language, color: Color(0xFF4A90E2)),
+            SizedBox(width: 8),
+            Text('Select Language'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '🌐 Choose language for content display and voice features',
+              style: TextStyle(fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
+            const SizedBox(height: 12),
+            _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
+            const SizedBox(height: 12),
+            _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Color(0xFFF5F5F5),
+      appBar: AppBar(
+        title: const Text(
+          '🤖 AI Summary & Quiz',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFF4A90E2),
+        elevation: 0,
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _offlineFiles.isEmpty
+              ? _buildEmptyState()
+              : Column(
+                  children: [
+                    _buildInfoBanner(),
+                    
+                    if (_processingFile != null) _buildProcessingCard(),
+                    
+                    Expanded(
+                      child: ListView.builder(
+                        key: _fileListKey,
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _offlineFiles.length,
+                        itemBuilder: (context, index) =>
+                            _buildFileCard(_offlineFiles[index], index),
+                      ),
+                    ),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.orange[50],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.folder_open,
+                size: 64,
+                color: Colors.orange[400],
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'No PDFs Downloaded Yet',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[800],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Download study materials from your classes first!',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pop(context),
+              icon: Icon(Icons.arrow_back, size: 20),
+              label: Text('Go Back to Classes'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Color(0xFF4A90E2),
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(Icons.lightbulb, color: Color(0xFF4A90E2), size: 24),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'How it works:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1976D2),
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  '1️⃣ Click ✨ to generate  2️⃣ Click 👁️ to view',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF1976D2),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProcessingCard() {
+    return Container(
+      margin: EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFFF9C4), Color(0xFFFFF59D)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orange.withOpacity(0.2),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.auto_awesome, color: Colors.orange[700], size: 24),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '🤖 AI Processing...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange[900],
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      _processingFile ?? '',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange[800],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: _progress,
+              minHeight: 10,
+              backgroundColor: Colors.white,
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.orange[700]!),
+            ),
+          ),
+          SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${(_progress * 100).toInt()}% Complete',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange[900],
+                ),
+              ),
+              Text(
+                _getProgressText(),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.orange[800],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getProgressText() {
+    if (_progress < 0.2) return 'Reading PDF...';
+    if (_progress < 0.5) return 'Creating summary...';
+    if (_progress < 0.8) return 'Making quiz...';
+    if (_progress < 0.95) return 'Drawing mind map...';
+    return 'Almost done!';
+  }
+
+  Widget _buildFileCard(FileRecord file, int index) {
+    final isProcessing = _processingFile == file.name;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            colors: [Colors.white, Color(0xFFFAFAFA)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFEF5350), Color(0xFFE53935)],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.picture_as_pdf,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          file.name,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: 4),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFE3F2FD),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Class: ${file.classCode}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF1976D2),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              
+              SizedBox(height: 16),
+              Divider(height: 1, color: Colors.grey[300]),
+              SizedBox(height: 16),
+              
+              if (isProcessing)
+                Center(
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation(Color(0xFF4A90E2)),
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'Processing... Please wait',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        key: index == 0 ? _firstGenerateButtonKey : null,
+                        onPressed: () => _generateSummaryQuizAndMindMap(file),
+                        icon: Icon(Icons.auto_awesome, size: 20),
+                        label: Text(
+                          'Generate',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF4A90E2),
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
+                        ),
+                      ),
+                    ),
+                    
+                    SizedBox(width: 12),
+                    
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        key: index == 0 ? _firstViewButtonKey : null,
+                        onPressed: () => _viewResults(file),
+                        icon: Icon(Icons.visibility, size: 20),
+                        label: Text(
+                          'View',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF66BB6A),
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class SummaryQuizResultScreen extends StatefulWidget {
+  final String fileName;
+  final String summary;
+  final List<Map<String, dynamic>> quiz;
+  final String classCode;
+  final MindMapNode? mindMap;
+  final String selectedLanguage;
+
+  const SummaryQuizResultScreen({
+    super.key,
+    required this.fileName,
+    required this.summary,
+    required this.quiz,
+    required this.classCode,
+    this.mindMap,
+    required this.selectedLanguage,
+  });
+
+  @override
+  State<SummaryQuizResultScreen> createState() => _SummaryQuizResultScreenState();
+}
+
+class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
+  Map<int, String> userAnswers = {};
+  bool showResults = false;
+  
+  final TTSService _ttsService = TTSService();
+  final STTService _sttService = STTService();
+  final TranslationService _translationService = TranslationService();
+  bool _isTTSSpeaking = false;
+  bool _isSTTListening = false;
+  int? _currentQuestionIndex;
+  
+  final GlobalKey _summaryTabKey = GlobalKey();
+  final GlobalKey _quizTabKey = GlobalKey();
+  final GlobalKey _mindMapTabKey = GlobalKey();
+  final GlobalKey _ttsButtonKey = GlobalKey();
+  final GlobalKey _voiceQuizButtonKey = GlobalKey();
+  TutorialCoachMark? _resultTutorialCoachMark;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeTTS();
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowResultOnboarding();
+    });
+  }
+
+  Future<void> _checkAndShowResultOnboarding() async {
+    final completed = await OnboardingService.isResultScreenCompleted();
+    if (!completed && mounted) {
+      await Future.delayed(Duration(milliseconds: 1000));
+      if (mounted) {
+        _showResultOnboarding();
+      }
+    }
+  }
+
+  void _showResultOnboarding() {
+    final targets = <TargetFocus>[];
+    
+    targets.add(
+      TargetFocus(
+        identify: "summary_tab",
+        keyTarget: _summaryTabKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.bottom,
+            builder: (context, controller) {
+              return _buildResultOnboardingContent(
+                icon: Icons.notes,
+                title: '📝 Summary Tab',
+                description: 'Read the AI-generated summary of your PDF content here.',
+                onNext: () => controller.next(),
+                onSkip: () => _skipResultOnboarding(controller),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    targets.add(
+      TargetFocus(
+        identify: "tts_button",
+        keyTarget: _ttsButtonKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.left,
+            builder: (context, controller) {
+              return _buildResultOnboardingContent(
+                icon: Icons.volume_up,
+                title: '🔊 Read Aloud',
+                description: 'Tap this button to hear the summary read aloud in your selected language.',
+                onNext: () => controller.next(),
+                onSkip: () => _skipResultOnboarding(controller),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    targets.add(
+      TargetFocus(
+        identify: "quiz_tab",
+        keyTarget: _quizTabKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.bottom,
+            builder: (context, controller) {
+              return _buildResultOnboardingContent(
+                icon: Icons.quiz,
+                title: '📝 Quiz Tab',
+                description: 'Test your knowledge with AI-generated quiz questions.',
+                onNext: () => controller.next(),
+                onSkip: () => _skipResultOnboarding(controller),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    if (widget.quiz.isNotEmpty) {
+      targets.add(
+        TargetFocus(
+          identify: "voice_quiz_button",
+          keyTarget: _voiceQuizButtonKey,
+          alignSkip: Alignment.topRight,
+          enableOverlayTab: true,
+          contents: [
+            TargetContent(
+              align: ContentAlign.left,
+              builder: (context, controller) {
+                return _buildResultOnboardingContent(
+                  icon: Icons.mic,
+                  title: '🎤 Voice Quiz',
+                  description: 'Answer quiz questions using your voice! The app will read the question and listen for your answer (A, B, C, or D).',
+                  onNext: () => _finishResultOnboarding(controller),
+                  onSkip: () => _skipResultOnboarding(controller),
+                  isLast: true,
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    }
+    
+    if (widget.mindMap != null) {
+      targets.add(
+        TargetFocus(
+          identify: "mindmap_tab",
+          keyTarget: _mindMapTabKey,
+          alignSkip: Alignment.topRight,
+          enableOverlayTab: true,
+          contents: [
+            TargetContent(
+              align: ContentAlign.bottom,
+              builder: (context, controller) {
+                return _buildResultOnboardingContent(
+                  icon: Icons.account_tree,
+                  title: '🧠 Mind Map',
+                  description: 'Visualize the key concepts and their relationships in an interactive mind map.',
+                  onNext: () => controller.next(),
+                  onSkip: () => _skipResultOnboarding(controller),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    }
+    
+    _resultTutorialCoachMark = TutorialCoachMark(
+      targets: targets,
+      colorShadow: Colors.black,
+      paddingFocus: 10,
+      opacityShadow: 0.8,
+      onFinish: () {
+        OnboardingService.markResultScreenCompleted();
+      },
+      onSkip: () {
+        OnboardingService.markResultScreenCompleted();
+        return true;
+      },
+    );
+    
+    _resultTutorialCoachMark?.show(context: context);
+  }
+
+  Widget _buildResultOnboardingContent({
     required IconData icon,
     required String title,
     required String description,
@@ -238,434 +1251,16 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     );
   }
 
-  void _skipOnboarding(TutorialCoachMarkController controller) {
+  void _skipResultOnboarding(TutorialCoachMarkController controller) {
     controller.skip();
-    OnboardingService.markSummaryQuizCompleted();
+    OnboardingService.markResultScreenCompleted();
   }
 
-  void _finishOnboarding(TutorialCoachMarkController controller) {
+  void _finishResultOnboarding(TutorialCoachMarkController controller) {
     controller.next();
-    OnboardingService.markSummaryQuizCompleted();
+    OnboardingService.markResultScreenCompleted();
   }
 
-  Future<void> _loadOfflineFiles() async {
-    setState(() => _loading = true);
-    try {
-      final files = await OfflineDB.getAllOfflineFiles();
-      final pdfFiles = files.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
-      setState(() {
-        _offlineFiles = pdfFiles;
-        _loading = false;
-      });
-      print('✅ Loaded ${pdfFiles.length} offline PDFs');
-    } catch (e) {
-      print('❌ Error loading offline files: $e');
-      setState(() => _loading = false);
-    }
-  }
-
-  // UPDATED: Now also generates mind map
-  Future<void> _generateSummaryQuizAndMindMap(FileRecord file) async {
-    final modelAvailable = await LLMSummaryService.isModelAvailable();
-    
-    String? selectedLanguage;
-    
-    if (modelAvailable && mounted) {
-      selectedLanguage = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.language, color: Color(0xFF4A90E2)),
-              SizedBox(width: 8),
-              Text('Select Language'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '🤖 AI Model detected!\nChoose summary language:',
-                style: TextStyle(fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
-              const SizedBox(height: 12),
-              _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
-              const SizedBox(height: 12),
-              _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
-            ],
-          ),
-        ),
-      );
-      
-      if (selectedLanguage == null) return;
-    }
-
-    setState(() {
-      _processingFile = file.name;
-      _progress = 0.0;
-    });
-
-    try {
-      print('🔄 Starting generation for: ${file.name}');
-
-      // Step 1: Extract text (15%)
-      setState(() => _progress = 0.15);
-      final text = await SummaryGenerator.extractTextFromPDF(file.localPath);
-      
-      if (text.isEmpty) {
-        throw Exception('Could not extract text from PDF');
-      }
-
-      String summary;
-      List<Map<String, dynamic>> quiz;
-
-      if (modelAvailable && selectedLanguage != null) {
-        // LLM path
-        setState(() => _progress = 0.4);
-        summary = await LLMSummaryService.generateSummaryWithLLM(
-          text: text,
-          language: selectedLanguage,
-        );
-
-        setState(() => _progress = 0.65);
-        quiz = await LLMSummaryService.generateQuizWithLLM(
-          summary: summary,
-          language: selectedLanguage,
-          numQuestions: 5,
-        );
-      } else {
-        // Script path
-        setState(() => _progress = 0.4);
-        summary = await SummaryGenerator.generateSummary(text);
-
-        setState(() => _progress = 0.65);
-        quiz = await SummaryGenerator.generateQuiz(summary);
-      }
-
-      // Step 4: Generate Mind Map (85%)
-      setState(() => _progress = 0.85);
-      print('🧠 Generating mind map...');
-      
-      final mindMap = await MindMapGenerator.generateMindMap(
-        summary: summary,
-        quiz: quiz,
-        fileName: file.name,
-      );
-
-      // Step 5: Save everything (100%)
-      setState(() => _progress = 1.0);
-      
-      await OfflineDB.saveSummaryAndQuiz(
-        file.classCode,
-        file.name,
-        summary,
-        quiz,
-      );
-
-      await OfflineDB.saveMindMap(
-        file.classCode,
-        file.name,
-        mindMap.toJson(),
-      );
-
-      print('✅ Summary, Quiz, and Mind Map saved');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              modelAvailable 
-                ? '✅ Generated with AI! Summary, Quiz & Mind Map ready!'
-                : '✅ Summary, Quiz & Mind Map generated!',
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ Error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      setState(() {
-        _processingFile = null;
-        _progress = 0.0;
-      });
-    }
-  }
-  
-  Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
-    return InkWell(
-      onTap: () => Navigator.pop(context, code),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE3F2FD),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF4A90E2)),
-        ),
-        child: Row(
-          children: [
-            Text(flag, style: const TextStyle(fontSize: 24)),
-            const SizedBox(width: 12),
-            Text(
-              name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _viewResults(FileRecord file) async {
-    try {
-      final result = await OfflineDB.getSummaryAndQuiz(file.classCode, file.name);
-      final mindMapData = await OfflineDB.getMindMap(file.classCode, file.name);
-      
-      if (result == null) {
-        throw Exception('No summary found. Generate it first!');
-      }
-
-      final summary = result['summary'] as String;
-      final quizRaw = result['quiz'] as List<dynamic>;
-      
-      final quiz = quizRaw.map((item) {
-        if (item is Map<String, dynamic>) {
-          return item;
-        } else if (item is Map) {
-          return Map<String, dynamic>.from(item);
-        } else {
-          throw Exception('Invalid quiz data format');
-        }
-      }).toList();
-
-      // Parse mind map if available
-      MindMapNode? mindMap;
-      if (mindMapData != null) {
-        try {
-          final mindMapJson = mindMapData['mindmap'] as Map<String, dynamic>;
-          mindMap = MindMapNode.fromJson(mindMapJson);
-        } catch (e) {
-          print('⚠️ Failed to parse mind map: $e');
-        }
-      }
-
-      if (!mounted) return;
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SummaryQuizResultScreen(
-            fileName: file.name,
-            summary: summary,
-            quiz: quiz,
-            classCode: file.classCode,
-            mindMap: mindMap,
-          ),
-        ),
-      );
-    } catch (e) {
-      print('❌ Error viewing results: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('📚 Summary, Quiz & Mind Map'),
-        backgroundColor: const Color(0xFF4A90E2),
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _offlineFiles.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.folder_open, size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No offline PDFs found',
-                        style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Download some materials first!',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                      ),
-                    ],
-                  ),
-                )
-              : Column(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      color: const Color(0xFFE3F2FD),
-                      child: const Text(
-                        '💡 Generate AI-powered summary, quiz & mind map from PDFs',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF1976D2),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-
-                    if (_processingFile != null)
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        color: Colors.amber[50],
-                        child: Column(
-                          children: [
-                            Text(
-                              'Processing: $_processingFile',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 12),
-                            LinearProgressIndicator(
-                              value: _progress,
-                              backgroundColor: Colors.grey[300],
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                Color(0xFF4A90E2),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${(_progress * 100).toInt()}%',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    Expanded(
-                      child: ListView.builder(
-                        key: _fileListKey, // 🆕 ADD KEY
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _offlineFiles.length,
-                        itemBuilder: (context, index) =>
-                            _buildFileCard(_offlineFiles[index], index),
-                      ),
-                    ),
-                  ],
-                ),
-    );
-  }
-
-  // 🆕 UPDATED: Added index parameter to only apply keys to first file card
-  Widget _buildFileCard(FileRecord file, int index) {
-    final isProcessing = _processingFile == file.name;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: Icon(
-          Icons.picture_as_pdf,
-          color: isProcessing ? Colors.orange : const Color(0xFF4A90E2),
-          size: 32,
-        ),
-        title: Text(
-          file.name,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          'Class: ${file.classCode}',
-          style: const TextStyle(fontSize: 12),
-        ),
-        trailing: isProcessing
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    key: index == 0 ? _firstViewButtonKey : null, // 🆕 ONLY apply to first view button
-                    icon: const Icon(Icons.visibility, color: Colors.green),
-                    tooltip: 'View Results',
-                    onPressed: () => _viewResults(file),
-                  ),
-                  IconButton(
-                    key: index == 0 ? _firstGenerateButtonKey : null, // 🆕 ONLY apply to first generate button
-                    icon: const Icon(Icons.auto_awesome, color: Color(0xFF4A90E2)),
-                    tooltip: 'Generate All',
-                    onPressed: () => _generateSummaryQuizAndMindMap(file),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-// UPDATED Result Screen with TTS & STT
-class SummaryQuizResultScreen extends StatefulWidget {
-  final String fileName;
-  final String summary;
-  final List<Map<String, dynamic>> quiz;
-  final String classCode;
-  final MindMapNode? mindMap;
-
-  const SummaryQuizResultScreen({
-    super.key,
-    required this.fileName,
-    required this.summary,
-    required this.quiz,
-    required this.classCode,
-    this.mindMap,
-  });
-
-  @override
-  State<SummaryQuizResultScreen> createState() => _SummaryQuizResultScreenState();
-}
-
-class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
-  Map<int, String> userAnswers = {};
-  bool showResults = false;
-  
-  // 🆕 ADD: TTS & STT instances
-  final TTSService _ttsService = TTSService();
-  final STTService _sttService = STTService();
-  bool _isTTSSpeaking = false;
-  bool _isSTTListening = false;
-  int? _currentQuestionIndex; // Track which question is being read for voice input
-  
-  // 🆕 ADD: Language selection state variable
-  String _selectedLanguage = 'en'; // Default English
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeTTS();
-  }
-
-  // 🆕 ADD: Initialize TTS
   Future<void> _initializeTTS() async {
     try {
       await _ttsService.initialize();
@@ -678,10 +1273,11 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
 
   @override
   void dispose() {
-    // Stop TTS when leaving screen
-     _ttsService.clearCompletionHandler();
+    _ttsService.clearCompletionHandler();
     _ttsService.stop();
     _sttService.dispose();
+    _translationService.dispose();
+    _resultTutorialCoachMark?.finish();
     super.dispose();
   }
 
@@ -793,108 +1389,38 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
   }
 
-  // 🆕 ADD: Show language selection dialog
-  Future<String?> _showLanguageSelectionDialog() async {
-    return await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.language, color: Color(0xFF4A90E2)),
-            SizedBox(width: 8),
-            Text('Select Reading Language'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              '🔊 Choose language for Text-to-Speech',
-              style: TextStyle(fontSize: 14),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
-            const SizedBox(height: 12),
-            _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
-            const SizedBox(height: 12),
-            _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
-    return InkWell(
-      onTap: () => Navigator.pop(context, code),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE3F2FD),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF4A90E2)),
-        ),
-        child: Row(
-          children: [
-            Text(flag, style: const TextStyle(fontSize: 24)),
-            const SizedBox(width: 12),
-            Text(
-              name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 🆕 ADD: Helper method to get language name
-  String _getLanguageName(String code) {
-    switch (code) {
-      case 'hi': return 'Hindi (हिंदी)';
-      case 'mr': return 'Marathi (मराठी)';
-      default: return 'English';
-    }
-  }
-
-  // 🆕 UPDATED: Toggle TTS for summary with language selection
   Future<void> _toggleSummaryTTS() async {
     if (_isTTSSpeaking) {
       await _ttsService.stop();
       setState(() => _isTTSSpeaking = false);
     } else {
-      // 🆕 ADDED: Ask for language before reading
-      final language = await _showLanguageSelectionDialog();
-      if (language == null) return; // User cancelled
+      setState(() => _isTTSSpeaking = true);
       
-      setState(() {
-        _selectedLanguage = language;
-        _isTTSSpeaking = true;
-      });
-      
-      // Set TTS language
-      await _ttsService.setLanguageForReading(language);
-      
-      // Speak summary
-      await _ttsService.speak(widget.summary);
-      
-      // Update state after completion
-      await Future.delayed(Duration(milliseconds: 500));
-      if (mounted && !_ttsService.isSpeaking) {
-        setState(() => _isTTSSpeaking = false);
+      try {
+        await _ttsService.setLanguageForReading(widget.selectedLanguage);
+        await _ttsService.speak(widget.summary);
+        
+        await Future.delayed(Duration(milliseconds: 500));
+        if (mounted && !_ttsService.isSpeaking) {
+          setState(() => _isTTSSpeaking = false);
+        }
+      } catch (e) {
+        print('❌ [SummaryTTS] Error: $e');
+        if (mounted) {
+          setState(() => _isTTSSpeaking = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to read summary: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
 
-  // 🆕 UPDATED: Handle voice quiz with language selection
   Future<void> _handleVoiceQuiz(int questionIndex) async {
     if (_isSTTListening) {
-      // Stop current listening
       await _sttService.stopListening();
       setState(() {
         _isSTTListening = false;
@@ -903,22 +1429,14 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       return;
     }
 
-    // 🆕 ADDED: Ask for language before reading quiz
-    final language = await _showLanguageSelectionDialog();
-    if (language == null) return; // User cancelled
-    
-    setState(() => _selectedLanguage = language);
-    
-    // Set TTS language
-    await _ttsService.setLanguageForReading(language);
+    await _ttsService.setLanguageForReading(widget.selectedLanguage);
 
     final question = widget.quiz[questionIndex];
     final questionText = question['question'] as String? ?? '';
     final options = question['options'] as List<dynamic>? ?? [];
 
-    // Build TTS text
     String ttsText = 'Question ${questionIndex + 1}. $questionText. ';
-    
+
     for (final opt in options) {
       final label = opt['label'] as String? ?? '';
       final text = opt['text'] as String? ?? '';
@@ -933,33 +1451,25 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         _currentQuestionIndex = questionIndex;
       });
 
-    // ✅ PROPER FIX: Use completion callback instead of timing
-    _ttsService.setOnCompletionHandler(() {
-      print('✅ [VoiceQuiz] TTS ACTUALLY finished, now starting STT');
-      
-      // Check if still on the same question
-      if (!mounted || _currentQuestionIndex != questionIndex) return;
-      
-      // Start STT after TTS truly finishes
-      _startSTTForQuestion(questionIndex);
-    });
+      _ttsService.setOnCompletionHandler(() {
+        print('✅ [VoiceQuiz] TTS ACTUALLY finished, now starting STT');
+        
+        if (!mounted || _currentQuestionIndex != questionIndex) return;
+        
+        _startSTTForQuestion(questionIndex);
+      });
 
-    // Start speaking - DON'T await this!
-    await _ttsService.speak(ttsText);
-    
-    // 🚫 DON'T put any STT code here! It will wait for completion callback
-    
+      await _ttsService.speak(ttsText);
+      
     } catch (e) {
       print('❌ [VoiceQuiz] Error: $e');
       _resetVoiceState();
     }
   }
 
-  // 🆕 ADD: Separate method for starting STT
   Future<void> _startSTTForQuestion(int questionIndex) async {
     if (!mounted || _currentQuestionIndex != questionIndex) return;
     
-    // Check if STT is available
     final sttAvailable = await _sttService.isAvailable();
     if (!sttAvailable) {
       if (mounted) {
@@ -974,7 +1484,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       return;
     }
 
-    // Start listening for answer
     setState(() {
       _isSTTListening = true;
       _isTTSSpeaking = false;
@@ -988,7 +1497,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       },
     );
 
-    // Auto-stop after 10 seconds
     Future.delayed(Duration(seconds: 10), () {
       if (mounted && _isSTTListening && _currentQuestionIndex == questionIndex) {
         _sttService.stopListening();
@@ -1006,7 +1514,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     });
   }
 
-  // 🆕 ADD: Reset voice state
   void _resetVoiceState() {
     setState(() {
       _isTTSSpeaking = false;
@@ -1015,17 +1522,13 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     });
   }
 
-  // 🆕 ADD: Handle voice answer
   void _handleVoiceAnswer(int questionIndex, String recognizedWords) {
-    // Stop listening
     _sttService.stopListening();
     setState(() => _isSTTListening = false);
 
-    // Parse answer (A, B, C, D)
     final words = recognizedWords.toUpperCase();
     String? selectedOption;
 
-    // Try to match A, B, C, or D
     if (words.contains('A')) {
       selectedOption = 'A';
     } else if (words.contains('B')) {
@@ -1037,13 +1540,11 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     }
 
     if (selectedOption != null) {
-      // Valid answer detected
       setState(() {
         userAnswers[questionIndex] = selectedOption!;
         _currentQuestionIndex = null;
       });
 
-      // Show feedback
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('✅ Selected: Option $selectedOption'),
@@ -1052,10 +1553,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         ),
       );
 
-      // Speak confirmation
       _ttsService.speak('You selected option $selectedOption');
     } else {
-      // Invalid answer
       setState(() => _currentQuestionIndex = null);
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1072,7 +1571,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // Stop TTS when back button pressed
         await _ttsService.stop();
         await _sttService.dispose();
         return true;
@@ -1085,10 +1583,22 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
             backgroundColor: const Color(0xFF4A90E2),
             bottom: TabBar(
               tabs: [
-                const Tab(icon: Icon(Icons.notes), text: 'Summary'),
-                const Tab(icon: Icon(Icons.quiz), text: 'Quiz'),
+                Tab(
+                  key: _summaryTabKey,
+                  icon: Icon(Icons.notes), 
+                  text: 'Summary'
+                ),
+                Tab(
+                  key: _quizTabKey,
+                  icon: Icon(Icons.quiz), 
+                  text: 'Quiz'
+                ),
                 if (widget.mindMap != null)
-                  const Tab(icon: Icon(Icons.account_tree), text: 'Mind Map'),
+                  Tab(
+                    key: _mindMapTabKey,
+                    icon: Icon(Icons.account_tree), 
+                    text: 'Mind Map'
+                  ),
               ],
             ),
           ),
@@ -1104,7 +1614,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
   }
 
-  // 🆕 UPDATED: Summary tab with TTS button and language badge
   Widget _buildSummaryTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1114,7 +1623,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with TTS button and language badge
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1128,18 +1636,19 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      if (_selectedLanguage != 'en') // Show selected language
+                      if (widget.selectedLanguage != 'en')
                         Text(
-                          '🌐 Reading in: ${_getLanguageName(_selectedLanguage)}',
+                          '🌐 ${TranslationService.getLanguageName(widget.selectedLanguage)}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey[600],
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                     ],
                   ),
-                  // 🆕 ADD: TTS Button
                   IconButton(
+                    key: _ttsButtonKey,
                     onPressed: _toggleSummaryTTS,
                     icon: AnimatedSwitcher(
                       duration: Duration(milliseconds: 300),
@@ -1169,7 +1678,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
   }
 
-  // 🆕 UPDATED: Quiz tab with voice controls
   Widget _buildQuizTab() {
     return widget.quiz.isEmpty
         ? Center(
@@ -1284,9 +1792,9 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
 
   Widget _buildMindMapNode(MindMapNode node) {
     final colors = [
-      const Color(0xFF4A90E2), // Blue - Root
-      const Color(0xFF66BB6A), // Green - Level 1
-      const Color(0xFFFF7043), // Orange - Level 2
+      const Color(0xFF4A90E2),
+      const Color(0xFF66BB6A),
+      const Color(0xFFFF7043),
     ];
 
     final color = colors[node.level.clamp(0, colors.length - 1)];
@@ -1333,7 +1841,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
   }
 
-  // 🆕 UPDATED: Quiz card with voice button
   Widget _buildQuizCard(Map<String, dynamic> q, int index) {
     try {
       final question = q['question'] as String? ?? 'Question unavailable';
@@ -1365,7 +1872,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Question header with voice button
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1379,9 +1885,9 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // 🆕 ADD: Voice Quiz Button
                   if (!showResults)
                     Container(
+                      key: index == 0 ? _voiceQuizButtonKey : null,
                       decoration: BoxDecoration(
                         color: isCurrentVoiceQuestion 
                             ? Colors.red.withOpacity(0.1) 
@@ -1411,7 +1917,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                 ],
               ),
               
-              // 🆕 ADD: Voice status indicator
               if (isCurrentVoiceQuestion) ...[
                 const SizedBox(height: 12),
                 Container(
@@ -1458,7 +1963,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
               
               const SizedBox(height: 12),
               
-              // Options
               ...options.map((opt) {
                 final label = opt['label'] as String? ?? '?';
                 final text = opt['text'] as String? ?? 'Option unavailable';
@@ -1545,9 +2049,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                     ),
                   ),
                 );
-              }),
+              }).toList(),
               
-              // Correct answer explanation
               if (showResults)
                 Container(
                   margin: const EdgeInsets.only(top: 8),

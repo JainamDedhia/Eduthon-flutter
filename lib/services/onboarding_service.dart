@@ -60,6 +60,16 @@ class OnboardingService {
     print('✅ [Onboarding] Model download onboarding completed');
   }
 
+// Add to lib/services/onboarding_service.dart
+static Future<bool> isResultScreenCompleted() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('result_screen_onboarding_completed') ?? false;
+}
+
+static Future<void> markResultScreenCompleted() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('result_screen_onboarding_completed', true);
+}
   // Check if join class onboarding is completed
   static Future<bool> isJoinClassCompleted() async {
     final prefs = await SharedPreferences.getInstance();
