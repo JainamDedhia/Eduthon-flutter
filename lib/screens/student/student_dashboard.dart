@@ -22,6 +22,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
   bool _isOnline = true;
   bool _networkChecked = false;
   StorageStats _storageStats = StorageStats.empty();
+  int _currentTab = 0; // Bottom nav index
 
   @override
   void initState() {
@@ -129,7 +130,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
               children: [
                 Icon(Icons.check_circle, color: Colors.white),
                 SizedBox(width: 8),
-                Text('Opening downloaded file...'),
+                Text('Opening file...'),
               ],
             ),
             backgroundColor: Colors.green,
@@ -234,7 +235,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
               children: [
                 CircularProgressIndicator(),
                 SizedBox(height: 20),
-                Text('Downloading and compressing...', textAlign: TextAlign.center),
+                Text('Downloading...', textAlign: TextAlign.center),
               ],
             ),
           ),
@@ -259,7 +260,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
                 children: [
                   Icon(Icons.check_circle, color: Colors.white),
                   SizedBox(width: 8),
-                  Expanded(child: Text('✅ "${material.name}" downloaded!')),
+                  Expanded(child: Text('✅ Downloaded!')),
                 ],
               ),
               backgroundColor: Colors.green,
@@ -295,8 +296,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Delete Offline File'),
-        content: Text('Delete "${file.name}" from offline storage?'),
+        title: Text('Delete File'),
+        content: Text('Delete "${file.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -313,13 +314,13 @@ class _StudentDashboardState extends State<StudentDashboard> {
                 setState(() {});
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('✅ "${file.name}" deleted')),
+                    SnackBar(content: Text('✅ Deleted')),
                   );
                 }
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Deletion failed: $e')),
+                    SnackBar(content: Text('Failed: $e')),
                   );
                 }
               }
@@ -336,8 +337,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Confirm Logout'),
-        content: Text('Are you sure you want to logout?'),
+        title: Text('Logout'),
+        content: Text('Are you sure?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -371,155 +372,437 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
     return Scaffold(
       backgroundColor: Color(0xFFF5F5F5),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // REDESIGNED HEADER
-            Container(
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
-                ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(30),
-                  bottomRight: Radius.circular(30),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 10,
-                    offset: Offset(0, 5),
-                  ),
-                ],
+      body: _buildBody(),
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  Widget _buildBody() {
+    switch (_currentTab) {
+      case 0:
+        return _buildClassesTab();
+      case 1:
+        return _buildMaterialsTab();
+      case 2:
+        return _buildAIToolsTab();
+      case 3:
+        return _buildSettingsTab();
+      default:
+        return _buildClassesTab();
+    }
+  }
+
+  // 🏠 TAB 1: MY CLASSES
+  Widget _buildClassesTab() {
+    return SafeArea(
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
               ),
-              child: Column(
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.school, color: Colors.white, size: 32),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'My Classes',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    // Status Badge
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _isOnline ? Colors.green : Colors.orange,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _isOnline ? Icons.wifi : Icons.wifi_off,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            _isOnline ? 'Online' : 'Offline',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Classes List
+          Expanded(
+            child: _loading
+                ? Center(child: CircularProgressIndicator())
+                : _classes.isEmpty
+                    ? _buildEmptyClasses()
+                    : ListView.builder(
+                        padding: EdgeInsets.all(16),
+                        itemCount: _classes.length,
+                        itemBuilder: (context, index) => _buildSimpleClassCard(_classes[index]),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSimpleClassCard(ClassModel classModel) {
+    return Card(
+      margin: EdgeInsets.only(bottom: 16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 3,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Class Name
+            Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF4A90E2).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.class_, color: Color(0xFF4A90E2), size: 24),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    classModel.className,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            SizedBox(height: 12),
+            
+            // Class Code
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Top Row: Welcome + Logout
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Welcome! 👋',
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              authProvider.user?.email ?? '',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.white70,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.logout, color: Colors.white, size: 28),
-                        onPressed: _handleLogout,
-                      ),
-                    ],
-                  ),
-                  
-                  SizedBox(height: 20),
-                  
-                  // Stats Cards
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          icon: Icons.class_,
-                          value: _classes.length.toString(),
-                          label: 'Classes',
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          icon: Icons.file_present,
-                          value: _classes.fold<int>(0, (sum, c) => sum + c.materials.length).toString(),
-                          label: 'Materials',
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          icon: _isOnline ? Icons.wifi : Icons.wifi_off,
-                          value: _isOnline ? 'Online' : 'Offline',
-                          label: 'Status',
-                          color: _isOnline ? Colors.greenAccent : Colors.orangeAccent,
-                        ),
-                      ),
-                    ],
-                  ),
-                  
-                  SizedBox(height: 16),
-                  
-                  // Quick Action Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildQuickActionButton(
-                          icon: Icons.auto_awesome,
-                          label: 'AI Summary',
-                          color: Color(0xFF66BB6A),
-                          onTap: () => Navigator.pushNamed(context, '/student/summary-quiz'),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: _buildQuickActionButton(
-                          icon: Icons.smart_toy,
-                          label: 'AI Model',
-                          color: Color(0xFFFF9800),
-                          onTap: () => Navigator.pushNamed(context, '/student/model-download'),
-                        ),
-                      ),
-                    ],
+                  Icon(Icons.tag, size: 16, color: Color(0xFF4A90E2)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Code: ${classModel.classCode}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF4A90E2),
+                    ),
                   ),
                 ],
               ),
             ),
-
-            // Storage Savings Banner
-            if (_storageStats.spaceSaved > 0)
-              Container(
-                margin: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF66BB6A), Color(0xFF4CAF50)],
+            
+            if (classModel.description.isNotEmpty) ...[
+              SizedBox(height: 8),
+              Text(
+                classModel.description,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            
+            Divider(height: 24),
+            
+            // Materials Count
+            Row(
+              children: [
+                Icon(Icons.insert_drive_file, size: 20, color: Color(0xFF66BB6A)),
+                SizedBox(width: 8),
+                Text(
+                  '${classModel.materials.length} Files',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF66BB6A),
                   ),
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.green.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
                 ),
-                child: Row(
+              ],
+            ),
+            
+            if (classModel.materials.isNotEmpty) ...[
+              SizedBox(height: 12),
+              ...classModel.materials.take(3).map((material) =>
+                _buildMaterialRow(classModel.classCode, material)
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaterialRow(String classCode, ClassMaterial material) {
+    return FutureBuilder<bool>(
+      future: _isMaterialDownloaded(classCode, material.name),
+      builder: (context, snapshot) {
+        final isDownloaded = snapshot.data ?? false;
+        
+        return Container(
+          margin: EdgeInsets.only(bottom: 8),
+          padding: EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDownloaded ? Color(0xFFE8F5E9) : Colors.grey[100],
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                isDownloaded ? Icons.download_done : Icons.picture_as_pdf,
+                color: isDownloaded ? Color(0xFF66BB6A) : Colors.red,
+                size: 20,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  material.name,
+                  style: TextStyle(fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isDownloaded)
+                IconButton(
+                  icon: Icon(Icons.open_in_new, size: 20, color: Color(0xFF4A90E2)),
+                  onPressed: () => _handleMaterialClick(classCode, material),
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints(),
+                )
+              else if (_isOnline)
+                IconButton(
+                  icon: Icon(Icons.download, size: 20, color: Color(0xFF4A90E2)),
+                  onPressed: () => _handleDownloadMaterial(classCode, material),
+                  padding: EdgeInsets.zero,
+                  constraints: BoxConstraints(),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyClasses() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.class_, size: 80, color: Colors.grey[300]),
+          SizedBox(height: 16),
+          Text(
+            'No Classes Yet',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          SizedBox(height: 8),
+          Text('Join your first class!', style: TextStyle(color: Colors.grey)),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pushNamed(context, '/student/join-class'),
+            icon: Icon(Icons.add, size: 24),
+            label: Text('Join Class', style: TextStyle(fontSize: 16)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Color(0xFF66BB6A),
+              padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 📚 TAB 2: STUDY MATERIALS
+  Widget _buildMaterialsTab() {
+    return Center(child: Text('Materials Tab - Coming in next update'));
+  }
+
+  // 🤖 TAB 3: AI TOOLS
+  Widget _buildAIToolsTab() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '🤖 AI Tools',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 24),
+            
+            _buildBigAIButton(
+              icon: Icons.auto_awesome,
+              title: 'Summary & Quiz',
+              subtitle: 'Generate from PDFs',
+              color: Color(0xFF4A90E2),
+              onTap: () => Navigator.pushNamed(context, '/student/summary-quiz'),
+            ),
+            
+            SizedBox(height: 16),
+            
+            _buildBigAIButton(
+              icon: Icons.smart_toy,
+              title: 'Download AI Model',
+              subtitle: 'Better summaries (678MB)',
+              color: Color(0xFFFF9800),
+              onTap: () => Navigator.pushNamed(context, '/student/model-download'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBigAIButton({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [color, color.withOpacity(0.8)],
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.3),
+              blurRadius: 12,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, size: 48, color: Colors.white),
+            ),
+            SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios, color: Colors.white),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ⚙️ TAB 4: SETTINGS
+  Widget _buildSettingsTab() {
+    final authProvider = Provider.of<AuthProvider>(context);
+    
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '⚙️ Settings',
+              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 24),
+            
+            // Profile Card
+            Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
                   children: [
-                    Icon(Icons.savings, color: Colors.white, size: 32),
-                    SizedBox(width: 12),
-                    Expanded(
+                    CircleAvatar(
+                      radius: 40,
+                      backgroundColor: Color(0xFF4A90E2),
+                      child: Icon(Icons.person, size: 40, color: Colors.white),
+                    ),
+                    SizedBox(height: 16),
+                    Text(
+                      authProvider.user?.email ?? '',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 4),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFE3F2FD),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: Text(
-                        'Storage Saved: ${(_storageStats.spaceSaved / 1024 / 1024).toStringAsFixed(1)}MB',
+                        'Student',
                         style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white,
+                          fontSize: 12,
+                          color: Color(0xFF4A90E2),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -527,388 +810,110 @@ class _StudentDashboardState extends State<StudentDashboard> {
                   ],
                 ),
               ),
-
-            // Offline Banner
-            if (_networkChecked && !_isOnline)
-              Container(
-                margin: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Color(0xFFFF9800),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.wifi_off, color: Colors.white, size: 28),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'You\'re offline. Tap materials to open downloaded files.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
+            ),
+            
+            SizedBox(height: 24),
+            
+            // Storage Stats
+            if (_storageStats.spaceSaved > 0)
+              Card(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                color: Color(0xFFE8F5E9),
+                child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      Icon(Icons.savings, color: Color(0xFF66BB6A), size: 32),
+                      SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Storage Saved',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              '${(_storageStats.spaceSaved / 1024 / 1024).toStringAsFixed(1)} MB',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF66BB6A),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-
-            // Classes Section Header
-            Padding(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'My Classes (${_classes.length})',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF333333),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.refresh, color: Color(0xFF4A90E2)),
-                    onPressed: () async {
-                      await _loadStorageStats();
-                      setState(() {});
-                    },
-                  ),
-                ],
+            
+            SizedBox(height: 16),
+            
+            // Logout Button
+            ElevatedButton.icon(
+              onPressed: _handleLogout,
+              icon: Icon(Icons.logout, size: 24),
+              label: Text('Logout', style: TextStyle(fontSize: 18)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-            ),
-
-            // Classes List
-            Expanded(
-              child: _loading
-                  ? Center(child: CircularProgressIndicator())
-                  : _classes.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: EdgeInsets.fromLTRB(20, 0, 20, 80),
-                          itemCount: _classes.length,
-                          itemBuilder: (context, index) => _buildClassCard(_classes[index]),
-                        ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.pushNamed(context, '/student/join-class'),
-        icon: Icon(Icons.add, size: 28),
-        label: Text('Join Class', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        backgroundColor: Color(0xFF66BB6A),
-        elevation: 8,
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
-  Widget _buildStatCard({
-    required IconData icon,
-    required String value,
-    required String label,
-    required Color color,
-  }) {
+  // Bottom Navigation
+  Widget _buildBottomNav() {
     return Container(
-      padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 28),
-          SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.white70,
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, -2),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildQuickActionButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(15),
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.4),
-              blurRadius: 8,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: Colors.white, size: 32),
-            SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.class_, size: 100, color: Colors.grey[300]),
-          SizedBox(height: 20),
-          Text(
-            'No classes yet',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
-            ),
+      child: BottomNavigationBar(
+        currentIndex: _currentTab,
+        onTap: (index) => setState(() => _currentTab = index),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Color(0xFF4A90E2),
+        unselectedItemColor: Colors.grey,
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home, size: 28),
+            label: 'Classes',
           ),
-          SizedBox(height: 10),
-          Text(
-            'Join your first class to get started!',
-            style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.folder, size: 28),
+            label: 'Materials',
           ),
-          SizedBox(height: 30),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/student/join-class'),
-            icon: Icon(Icons.add),
-            label: Text('Join Class'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFF66BB6A),
-              padding: EdgeInsets.symmetric(horizontal: 30, vertical: 16),
-              textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.auto_awesome, size: 28),
+            label: 'AI Tools',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings, size: 28),
+            label: 'Settings',
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildClassCard(ClassModel classModel) {
-    return Card(
-      margin: EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-      elevation: 4,
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            colors: [Colors.white, Color(0xFFF5F5F5)],
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Class Header
-              Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF4A90E2).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(Icons.class_, color: Color(0xFF4A90E2), size: 28),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          classModel.className,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF333333),
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Code: ${classModel.classCode}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF4A90E2),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF66BB6A).withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${classModel.materials.length} files',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF66BB6A),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              
-              if (classModel.description.isNotEmpty) ...[
-                SizedBox(height: 12),
-                Text(
-                  classModel.description,
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-              ],
-              
-              Divider(height: 24, thickness: 1),
-              
-              // Materials Section
-              Text(
-                '📚 Learning Materials',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF333333),
-                ),
-              ),
-              SizedBox(height: 12),
-              
-              if (classModel.materials.isEmpty)
-                Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'No materials available yet.',
-                    style: TextStyle(
-                      color: Colors.grey[500],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                )
-              else
-                ...classModel.materials.map((material) => 
-                  _buildMaterialItem(classModel.classCode, material)
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMaterialItem(String classCode, ClassMaterial material) {
-    return FutureBuilder<bool>(
-      future: _isMaterialDownloaded(classCode, material.name),
-      builder: (context, snapshot) {
-        final isDownloaded = snapshot.data ?? false;
-        
-        return Container(
-          margin: EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: isDownloaded ? Color(0xFFE8F5E9) : Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: isDownloaded ? Color(0xFF66BB6A) : Colors.grey[300]!,
-              width: 2,
-            ),
-          ),
-          child: ListTile(
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isDownloaded 
-                  ? Color(0xFF66BB6A).withOpacity(0.2)
-                  : Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                isDownloaded ? Icons.download_done : Icons.picture_as_pdf,
-                color: isDownloaded ? Color(0xFF66BB6A) : Colors.red,
-                size: 28,
-              ),
-            ),
-            title: Text(
-              material.name,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            subtitle: Padding(
-              padding: EdgeInsets.only(top: 6),
-              child: Text(
-                isDownloaded 
-                  ? '✅ Downloaded (tap to open)' 
-                  : _isOnline 
-                    ? '🌐 Tap to open in browser'
-                    : '📴 Not available offline',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDownloaded ? Color(0xFF66BB6A) : Colors.grey[600],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            trailing: isDownloaded
-              ? IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red, size: 24),
-                  onPressed: () async {
-                    final files = await OfflineDB.getOfflineFiles(classCode);
-                    final file = files.firstWhere((f) => f.name == material.name);
-                    _handleDeleteFile(file);
-                  },
-                )
-              : _isOnline
-                ? IconButton(
-                    icon: Icon(Icons.download, color: Color(0xFF4A90E2), size: 24),
-                    onPressed: () => _handleDownloadMaterial(classCode, material),
-                  )
-                : null,
-            onTap: () => _handleMaterialClick(classCode, material),
-          ),
-        );
-      },
     );
   }
 }
