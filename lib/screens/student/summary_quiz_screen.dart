@@ -1,6 +1,4 @@
 // FILE: lib/screens/student/summary_quiz_screen.dart
-// REPLACE THE ENTIRE FILE WITH THIS VERSION
-
 import 'package:flutter/material.dart';
 import '../../services/summary_generator.dart';
 import '../../services/mind_map_generator.dart';
@@ -10,6 +8,8 @@ import '../../services/quiz_sync_service.dart';
 import '../../providers/auth_provider.dart';
 import 'package:claudetest/services/llm_summary_service.dart';
 import 'package:claudetest/services/offline_db.dart';
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart'; // 🆕 ADD
+import '../../services/onboarding_service.dart'; // 🆕 ADD
 
 class SummaryQuizScreen extends StatefulWidget {  
   const SummaryQuizScreen({super.key});
@@ -23,11 +23,226 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   bool _loading = true;
   String? _processingFile;
   double _progress = 0.0;
+  
+  // 🆕 ADD: Onboarding keys
+  final GlobalKey _fileListKey = GlobalKey();
+  final GlobalKey _firstGenerateButtonKey = GlobalKey();
+  final GlobalKey _firstViewButtonKey = GlobalKey();
+  TutorialCoachMark? _tutorialCoachMark;
 
   @override
   void initState() {
     super.initState();
     _loadOfflineFiles();
+    
+    // 🆕 ADD: Initialize onboarding
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowOnboarding();
+    });
+  }
+
+  // 🆕 ADD: Check and show onboarding
+  Future<void> _checkAndShowOnboarding() async {
+    final completed = await OnboardingService.isSummaryQuizCompleted();
+    if (!completed && mounted && _offlineFiles.isNotEmpty) {
+      await Future.delayed(Duration(milliseconds: 800));
+      if (mounted) {
+        _showOnboarding();
+      }
+    }
+  }
+
+  // 🆕 ADD: Create onboarding tutorial
+  void _showOnboarding() {
+    final targets = <TargetFocus>[];
+    
+    // Target 1: File List
+    targets.add(
+      TargetFocus(
+        identify: "file_list",
+        keyTarget: _fileListKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.bottom,
+            builder: (context, controller) {
+              return _buildOnboardingContent(
+                icon: Icons.picture_as_pdf,
+                title: '📄 Your PDFs',
+                description: 'These are your downloaded PDF files.\nSelect any to generate summary & quiz!',
+                onNext: () => controller.next(),
+                onSkip: () => _skipOnboarding(controller),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    // Target 2: Generate Button
+    targets.add(
+      TargetFocus(
+        identify: "generate_button",
+        keyTarget: _firstGenerateButtonKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return _buildOnboardingContent(
+                icon: Icons.auto_awesome,
+                title: '✨ Generate AI Content',
+                description: 'Tap this button to create:\n• Summary\n• Quiz questions\n• Mind map',
+                onNext: () => controller.next(),
+                onSkip: () => _skipOnboarding(controller),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    // Target 3: View Button
+    targets.add(
+      TargetFocus(
+        identify: "view_button",
+        keyTarget: _firstViewButtonKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return _buildOnboardingContent(
+                icon: Icons.visibility,
+                title: '👁️ View Results',
+                description: 'After generating, tap here to:\n• Read summary\n• Take quiz\n• See mind map',
+                onNext: () => _finishOnboarding(controller),
+                onSkip: () => _skipOnboarding(controller),
+                isLast: true,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    _tutorialCoachMark = TutorialCoachMark(
+      targets: targets,
+      colorShadow: Colors.black,
+      paddingFocus: 10,
+      opacityShadow: 0.8,
+      onFinish: () {
+        OnboardingService.markSummaryQuizCompleted();
+      },
+      onSkip: () {
+        OnboardingService.markSummaryQuizCompleted();
+        return true;
+      },
+    );
+    
+    _tutorialCoachMark?.show(context: context);
+  }
+
+  // 🆕 ADD: Onboarding content widget
+  Widget _buildOnboardingContent({
+    required IconData icon,
+    required String title,
+    required String description,
+    required VoidCallback onNext,
+    required VoidCallback onSkip,
+    bool isLast = false,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Color(0xFF4A90E2).withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 48, color: Color(0xFF4A90E2)),
+          ),
+          SizedBox(height: 16),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 12),
+          Text(
+            description,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.black54,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: onSkip,
+                child: Text(
+                  'Skip',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: onNext,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF4A90E2),
+                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  isLast ? '✓ Got it!' : 'Next →',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _skipOnboarding(TutorialCoachMarkController controller) {
+    controller.skip();
+    OnboardingService.markSummaryQuizCompleted();
+  }
+
+  void _finishOnboarding(TutorialCoachMarkController controller) {
+    controller.next();
+    OnboardingService.markSummaryQuizCompleted();
   }
 
   Future<void> _loadOfflineFiles() async {
@@ -346,10 +561,11 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
 
                     Expanded(
                       child: ListView.builder(
+                        key: _fileListKey, // 🆕 ADD KEY
                         padding: const EdgeInsets.all(16),
                         itemCount: _offlineFiles.length,
                         itemBuilder: (context, index) =>
-                            _buildFileCard(_offlineFiles[index]),
+                            _buildFileCard(_offlineFiles[index], index),
                       ),
                     ),
                   ],
@@ -357,7 +573,8 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     );
   }
 
-  Widget _buildFileCard(FileRecord file) {
+  // 🆕 UPDATED: Added index parameter to only apply keys to first file card
+  Widget _buildFileCard(FileRecord file, int index) {
     final isProcessing = _processingFile == file.name;
 
     return Card(
@@ -386,11 +603,13 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
+                    key: index == 0 ? _firstViewButtonKey : null, // 🆕 ONLY apply to first view button
                     icon: const Icon(Icons.visibility, color: Colors.green),
                     tooltip: 'View Results',
                     onPressed: () => _viewResults(file),
                   ),
                   IconButton(
+                    key: index == 0 ? _firstGenerateButtonKey : null, // 🆕 ONLY apply to first generate button
                     icon: const Icon(Icons.auto_awesome, color: Color(0xFF4A90E2)),
                     tooltip: 'Generate All',
                     onPressed: () => _generateSummaryQuizAndMindMap(file),

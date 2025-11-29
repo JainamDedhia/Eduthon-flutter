@@ -8,6 +8,9 @@ import '../../providers/auth_provider.dart';
 import '../../services/offline_db.dart';
 import '../../services/download_manager.dart';
 import 'package:claudetest/services/quiz_sync_service.dart';
+// ADD THESE IMPORTS at the top of student_dashboard.dart (after existing imports)
+import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import '../../services/onboarding_service.dart';
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -24,6 +27,15 @@ class _StudentDashboardState extends State<StudentDashboard> {
   StorageStats _storageStats = StorageStats.empty();
   int _currentTab = 0; // Bottom nav index
 
+  // 🆕 ADD THESE GlobalKeys for onboarding targets
+  final GlobalKey _joinClassKey = GlobalKey();
+  final GlobalKey _classCardKey = GlobalKey();
+  final GlobalKey _downloadButtonKey = GlobalKey();
+  final GlobalKey _aiToolsTabKey = GlobalKey();
+  final GlobalKey _settingsTabKey = GlobalKey();
+  
+  TutorialCoachMark? _tutorialCoachMark;
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +43,258 @@ class _StudentDashboardState extends State<StudentDashboard> {
     _loadStorageStats();
     _listenToClasses();
     _syncQuizResults();
+    
+    // 🆕 ADD: Initialize onboarding after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndShowOnboarding();
+    });
+  }
+
+  // 🆕 ADD: New method to check and show onboarding
+  Future<void> _checkAndShowOnboarding() async {
+    final completed = await OnboardingService.isStudentDashboardCompleted();
+    if (!completed && mounted) {
+      // Wait a bit for UI to settle
+      await Future.delayed(Duration(milliseconds: 500));
+      if (mounted) {
+        _showOnboarding();
+      }
+    }
+  }
+
+  // 🆕 ADD: Create onboarding tutorial
+  void _showOnboarding() {
+    final targets = <TargetFocus>[];
+    
+    // Target 1: Classes Tab (current screen)
+    targets.add(
+      TargetFocus(
+        identify: "classes_tab",
+        keyTarget: _classCardKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.bottom,
+            builder: (context, controller) {
+              return _buildOnboardingContent(
+                icon: Icons.class_,
+                title: '📚 Your Classes',
+                description: 'See all classes you joined here.\nTap any class to view materials.',
+                onNext: () => controller.next(),
+                onSkip: () => _skipOnboarding(controller),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    // Target 2: Download Button
+    targets.add(
+      TargetFocus(
+        identify: "download_button",
+        keyTarget: _downloadButtonKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return _buildOnboardingContent(
+                icon: Icons.download,
+                title: '⬇️ Download Files',
+                description: 'Download PDFs to study offline.\nFiles work without internet!',
+                onNext: () => controller.next(),
+                onSkip: () => _skipOnboarding(controller),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    // Target 3: AI Tools Tab
+    targets.add(
+      TargetFocus(
+        identify: "ai_tools",
+        keyTarget: _aiToolsTabKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return _buildOnboardingContent(
+                icon: Icons.auto_awesome,
+                title: '🤖 AI Tools',
+                description: 'Generate summaries & quizzes from PDFs.\nTap here to access AI features!',
+                onNext: () => controller.next(),
+                onSkip: () => _skipOnboarding(controller),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    // Target 4: Settings Tab
+    targets.add(
+      TargetFocus(
+        identify: "settings",
+        keyTarget: _settingsTabKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return _buildOnboardingContent(
+                icon: Icons.settings,
+                title: '⚙️ Settings',
+                description: 'View your profile & logout here.\nCheck storage savings!',
+                onNext: () => _finishOnboarding(controller),
+                onSkip: () => _skipOnboarding(controller),
+                isLast: true,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+    
+    _tutorialCoachMark = TutorialCoachMark(
+      targets: targets,
+      colorShadow: Colors.black,
+      paddingFocus: 10,
+      opacityShadow: 0.8,
+      onFinish: () {
+        OnboardingService.markStudentDashboardCompleted();
+      },
+      onSkip: () {
+        OnboardingService.markStudentDashboardCompleted();
+        return true;
+      },
+    );
+    
+    _tutorialCoachMark?.show(context: context);
+  }
+
+  // 🆕 ADD: Build onboarding content widget
+  Widget _buildOnboardingContent({
+    required IconData icon,
+    required String title,
+    required String description,
+    required VoidCallback onNext,
+    required VoidCallback onSkip,
+    bool isLast = false,
+  }) {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Icon
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Color(0xFF4A90E2).withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 48, color: Color(0xFF4A90E2)),
+          ),
+          
+          SizedBox(height: 16),
+          
+          // Title
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          
+          SizedBox(height: 12),
+          
+          // Description
+          Text(
+            description,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.black54,
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          
+          SizedBox(height: 24),
+          
+          // Buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Skip button
+              TextButton(
+                onPressed: onSkip,
+                child: Text(
+                  'Skip Tour',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+              
+              // Next/Finish button
+              ElevatedButton(
+                onPressed: onNext,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Color(0xFF4A90E2),
+                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  isLast ? '✓ Got it!' : 'Next →',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 🆕 ADD: Skip onboarding handler
+  void _skipOnboarding(TutorialCoachMarkController controller) {
+    controller.skip();
+    OnboardingService.markStudentDashboardCompleted();
+  }
+
+  // 🆕 ADD: Finish onboarding handler
+  void _finishOnboarding(TutorialCoachMarkController controller) {
+    controller.next();
+    OnboardingService.markStudentDashboardCompleted();
   }
 
   Future<void> _syncQuizResults() async {
@@ -374,6 +638,20 @@ class _StudentDashboardState extends State<StudentDashboard> {
       backgroundColor: Color(0xFFF5F5F5),
       body: _buildBody(),
       bottomNavigationBar: _buildBottomNav(),
+      
+      // 🆕 ADD THIS: Floating action button for Join Class
+      floatingActionButton: _currentTab == 0 && _classes.isEmpty
+          ? FloatingActionButton.extended(
+              key: _joinClassKey,
+              onPressed: () => Navigator.pushNamed(context, '/student/join-class'),
+              icon: Icon(Icons.add, size: 28),
+              label: Text(
+                'Join Class',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: Color(0xFF66BB6A),
+            )
+          : null,
     );
   }
 
@@ -473,6 +751,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   Widget _buildSimpleClassCard(ClassModel classModel) {
     return Card(
+      key: _classCardKey, // 🆕 ADD THIS LINE
       margin: EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 3,
@@ -602,6 +881,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
               ),
               if (isDownloaded)
                 IconButton(
+                  key: _downloadButtonKey, // 🆕 ADD THIS LINE
                   icon: Icon(Icons.open_in_new, size: 20, color: Color(0xFF4A90E2)),
                   onPressed: () => _handleMaterialClick(classCode, material),
                   padding: EdgeInsets.zero,
@@ -905,11 +1185,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
             label: 'Materials',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.auto_awesome, size: 28),
+            icon: Icon(Icons.auto_awesome, size: 28, key: _aiToolsTabKey), // 🆕 ADD KEY
             label: 'AI Tools',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings, size: 28),
+            icon: Icon(Icons.settings, size: 28, key: _settingsTabKey), // 🆕 ADD KEY
             label: 'Settings',
           ),
         ],
