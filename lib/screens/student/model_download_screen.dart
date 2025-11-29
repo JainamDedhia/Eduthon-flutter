@@ -93,7 +93,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
               return _buildOnboardingContent(
                 icon: Icons.download,
                 title: '⬇️ Start Download',
-                description: 'Tap here to download the AI model.\nSize: 678 MB\n\n💡 Use WiFi to save mobile data!',
+                description: 'Tap here to download the AI model\n💡 Use WiFi to save mobile data!',
                 onNext: () => controller.next(),
                 onSkip: () => _skipOnboarding(controller),
               );
@@ -355,7 +355,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
         title: const Text('Delete AI Model'),
         content: const Text(
           'Are you sure you want to delete the AI model?\n\n'
-          'You will need to download it again (678MB) to use Summary & Quiz features.',
+          'You will need to download it again to use Summary & Quiz features.',
         ),
         actions: [
           TextButton(
@@ -587,8 +587,6 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
                     ),
                     const SizedBox(height: 20),
                     const Divider(),
-                    const SizedBox(height: 12),
-                    _buildInfoRow(Icons.sd_card, 'Size', '~678 MB'),
                     const SizedBox(height: 8),
                     _buildInfoRow(Icons.auto_awesome, 'Features', 'Better quality + Multilingual'),
                     const SizedBox(height: 8),
@@ -906,7 +904,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
             onPressed: _isOnline ? _startDownload : null,
             icon: const Icon(Icons.download, size: 28),
             label: const Text(
-              'Start Download (678 MB)',
+              'Start Download',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(

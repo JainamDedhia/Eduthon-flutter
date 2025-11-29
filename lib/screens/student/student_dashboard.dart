@@ -29,8 +29,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   // 🆕 ADD THESE GlobalKeys for onboarding targets
   final GlobalKey _joinClassKey = GlobalKey();
-  final GlobalKey _classCardKey = GlobalKey();
-  final GlobalKey _downloadButtonKey = GlobalKey();
+  final GlobalKey _firstClassCardKey = GlobalKey(); // Only for first class card
+  final GlobalKey _firstDownloadButtonKey = GlobalKey(); // Only for first download button
   final GlobalKey _aiToolsTabKey = GlobalKey();
   final GlobalKey _settingsTabKey = GlobalKey();
   
@@ -54,10 +54,14 @@ class _StudentDashboardState extends State<StudentDashboard> {
   Future<void> _checkAndShowOnboarding() async {
     final completed = await OnboardingService.isStudentDashboardCompleted();
     if (!completed && mounted) {
-      // Wait a bit for UI to settle
-      await Future.delayed(Duration(milliseconds: 500));
-      if (mounted) {
-        _showOnboarding();
+      // Wait a bit for UI to settle and data to load
+      await Future.delayed(Duration(milliseconds: 1500));
+      if (mounted && !_loading && _classes.isNotEmpty) {
+        // Wait a bit more for the class cards to render properly
+        await Future.delayed(Duration(milliseconds: 500));
+        if (mounted) {
+          _showOnboarding();
+        }
       }
     }
   }
@@ -66,11 +70,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
   void _showOnboarding() {
     final targets = <TargetFocus>[];
     
-    // Target 1: Classes Tab (current screen)
+    // Target 1: Classes Tab (current screen) - Only target first class card
     targets.add(
       TargetFocus(
         identify: "classes_tab",
-        keyTarget: _classCardKey,
+        keyTarget: _firstClassCardKey,
         alignSkip: Alignment.topRight,
         enableOverlayTab: true,
         contents: [
@@ -90,11 +94,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
       ),
     );
     
-    // Target 2: Download Button
+    // Target 2: Download Button - Only target first download button
     targets.add(
       TargetFocus(
         identify: "download_button",
-        keyTarget: _downloadButtonKey,
+        keyTarget: _firstDownloadButtonKey,
         alignSkip: Alignment.topRight,
         enableOverlayTab: true,
         contents: [
@@ -741,7 +745,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
                     : ListView.builder(
                         padding: EdgeInsets.all(16),
                         itemCount: _classes.length,
-                        itemBuilder: (context, index) => _buildSimpleClassCard(_classes[index]),
+                        itemBuilder: (context, index) => _buildSimpleClassCard(_classes[index], index),
                       ),
           ),
         ],
@@ -749,9 +753,10 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  Widget _buildSimpleClassCard(ClassModel classModel) {
+  // 🆕 UPDATED: Added index parameter to only apply key to first card
+  Widget _buildSimpleClassCard(ClassModel classModel, int index) {
     return Card(
-      key: _classCardKey, // 🆕 ADD THIS LINE
+      key: index == 0 ? _firstClassCardKey : null, // 🆕 ONLY apply to first card
       margin: EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 3,
@@ -840,8 +845,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
             
             if (classModel.materials.isNotEmpty) ...[
               SizedBox(height: 12),
-              ...classModel.materials.take(3).map((material) =>
-                _buildMaterialRow(classModel.classCode, material)
+              ...classModel.materials.asMap().entries.map((entry) =>
+                _buildMaterialRow(classModel.classCode, entry.value, entry.key)
               ),
             ],
           ],
@@ -850,7 +855,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  Widget _buildMaterialRow(String classCode, ClassMaterial material) {
+  // 🆕 FIXED: Key is now on the DOWNLOAD button (when file is NOT downloaded)
+  Widget _buildMaterialRow(String classCode, ClassMaterial material, int materialIndex) {
     return FutureBuilder<bool>(
       future: _isMaterialDownloaded(classCode, material.name),
       builder: (context, snapshot) {
@@ -881,7 +887,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
               ),
               if (isDownloaded)
                 IconButton(
-                  key: _downloadButtonKey, // 🆕 ADD THIS LINE
                   icon: Icon(Icons.open_in_new, size: 20, color: Color(0xFF4A90E2)),
                   onPressed: () => _handleMaterialClick(classCode, material),
                   padding: EdgeInsets.zero,
@@ -889,6 +894,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
                 )
               else if (_isOnline)
                 IconButton(
+                  key: materialIndex == 0 ? _firstDownloadButtonKey : null, // 🆕 FIXED: Key on DOWNLOAD button
                   icon: Icon(Icons.download, size: 20, color: Color(0xFF4A90E2)),
                   onPressed: () => _handleDownloadMaterial(classCode, material),
                   padding: EdgeInsets.zero,

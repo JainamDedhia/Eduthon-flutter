@@ -10,6 +10,9 @@ import 'package:claudetest/services/llm_summary_service.dart';
 import 'package:claudetest/services/offline_db.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart'; // 🆕 ADD
 import '../../services/onboarding_service.dart'; // 🆕 ADD
+// 🆕 ADD: TTS & STT services
+import '../../services/tts_service.dart';
+import '../../services/stt_service.dart';
 
 class SummaryQuizScreen extends StatefulWidget {  
   const SummaryQuizScreen({super.key});
@@ -621,7 +624,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   }
 }
 
-// UPDATED Result Screen with Mind Map Tab
+// UPDATED Result Screen with TTS & STT
 class SummaryQuizResultScreen extends StatefulWidget {
   final String fileName;
   final String summary;
@@ -645,13 +648,45 @@ class SummaryQuizResultScreen extends StatefulWidget {
 class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
   Map<int, String> userAnswers = {};
   bool showResults = false;
+  
+  // 🆕 ADD: TTS & STT instances
+  final TTSService _ttsService = TTSService();
+  final STTService _sttService = STTService();
+  bool _isTTSSpeaking = false;
+  bool _isSTTListening = false;
+  int? _currentQuestionIndex; // Track which question is being read for voice input
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeTTS();
+  }
+
+  // 🆕 ADD: Initialize TTS
+  Future<void> _initializeTTS() async {
+    try {
+      await _ttsService.initialize();
+      await _sttService.initialize();
+      print('✅ [SummaryQuiz] TTS & STT initialized');
+    } catch (e) {
+      print('❌ [SummaryQuiz] TTS/STT initialization failed: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    // Stop TTS when leaving screen
+    _ttsService.stop();
+    _sttService.dispose();
+    super.dispose();
+  }
 
   Future<void> _saveQuizResult(int correctAnswers, int totalQuestions) async {
     try {
       final studentId = await Future.microtask(() {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      return auth.user?.uid ?? 'unknown';
-       });
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        return auth.user?.uid ?? 'unknown';
+      });
       
       final result = QuizResult(
         studentId: studentId,
@@ -754,34 +789,217 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
   }
 
+  // 🆕 ADD: Toggle TTS for summary
+  Future<void> _toggleSummaryTTS() async {
+    if (_isTTSSpeaking) {
+      await _ttsService.stop();
+      setState(() => _isTTSSpeaking = false);
+    } else {
+      setState(() => _isTTSSpeaking = true);
+      await _ttsService.speak(widget.summary);
+      // Update state after completion
+      await Future.delayed(Duration(milliseconds: 500));
+      if (mounted && !_ttsService.isSpeaking) {
+        setState(() => _isTTSSpeaking = false);
+      }
+    }
+  }
+
+  // 🆕 ADD: Read quiz question with options using TTS + activate STT
+  Future<void> _handleVoiceQuiz(int questionIndex) async {
+    if (_isSTTListening) {
+      // Stop current listening
+      await _sttService.stopListening();
+      setState(() {
+        _isSTTListening = false;
+        _currentQuestionIndex = null;
+      });
+      return;
+    }
+
+    final question = widget.quiz[questionIndex];
+    final questionText = question['question'] as String? ?? '';
+    final options = question['options'] as List<dynamic>? ?? [];
+
+    // Build TTS text
+    String ttsText = 'Question ${questionIndex + 1}. $questionText. ';
+    
+    for (final opt in options) {
+      final label = opt['label'] as String? ?? '';
+      final text = opt['text'] as String? ?? '';
+      ttsText += 'Option $label: $text. ';
+    }
+
+    ttsText += 'Please say your answer: A, B, C, or D.';
+
+    try {
+      setState(() {
+        _isTTSSpeaking = true;
+        _currentQuestionIndex = questionIndex;
+      });
+
+      // Speak the question and options
+      await _ttsService.speak(ttsText);
+
+      // Wait for TTS to finish
+      await Future.delayed(Duration(milliseconds: 500));
+      
+      // Check if STT is available
+      final sttAvailable = await _sttService.isAvailable();
+      if (!sttAvailable) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Speech recognition not available'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        setState(() {
+          _isTTSSpeaking = false;
+          _currentQuestionIndex = null;
+        });
+        return;
+      }
+
+      // Start listening for answer
+      setState(() {
+        _isSTTListening = true;
+        _isTTSSpeaking = false;
+      });
+
+      await _sttService.startListening(
+        onResult: (recognizedWords) {
+          _handleVoiceAnswer(questionIndex, recognizedWords);
+        },
+      );
+
+      // Auto-stop after 10 seconds
+      Future.delayed(Duration(seconds: 10), () {
+        if (mounted && _isSTTListening && _currentQuestionIndex == questionIndex) {
+          _sttService.stopListening();
+          setState(() {
+            _isSTTListening = false;
+            _currentQuestionIndex = null;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⏱️ Voice input timed out'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      });
+
+    } catch (e) {
+      print('❌ [VoiceQuiz] Error: $e');
+      setState(() {
+        _isTTSSpeaking = false;
+        _isSTTListening = false;
+        _currentQuestionIndex = null;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Voice quiz error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // 🆕 ADD: Handle voice answer
+  void _handleVoiceAnswer(int questionIndex, String recognizedWords) {
+    // Stop listening
+    _sttService.stopListening();
+    setState(() => _isSTTListening = false);
+
+    // Parse answer (A, B, C, D)
+    final words = recognizedWords.toUpperCase();
+    String? selectedOption;
+
+    // Try to match A, B, C, or D
+    if (words.contains('A')) {
+      selectedOption = 'A';
+    } else if (words.contains('B')) {
+      selectedOption = 'B';
+    } else if (words.contains('C')) {
+      selectedOption = 'C';
+    } else if (words.contains('D')) {
+      selectedOption = 'D';
+    }
+
+    if (selectedOption != null) {
+      // Valid answer detected
+      setState(() {
+        userAnswers[questionIndex] = selectedOption!;
+        _currentQuestionIndex = null;
+      });
+
+      // Show feedback
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ Selected: Option $selectedOption'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Speak confirmation
+      _ttsService.speak('You selected option $selectedOption');
+    } else {
+      // Invalid answer
+      setState(() => _currentQuestionIndex = null);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Could not recognize A, B, C, or D. Please try again.'),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: widget.mindMap != null ? 3 : 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(widget.fileName),
-          backgroundColor: const Color(0xFF4A90E2),
-          bottom: TabBar(
-            tabs: [
-              const Tab(icon: Icon(Icons.notes), text: 'Summary'),
-              const Tab(icon: Icon(Icons.quiz), text: 'Quiz'),
-              if (widget.mindMap != null)
-                const Tab(icon: Icon(Icons.account_tree), text: 'Mind Map'),
+    return WillPopScope(
+      onWillPop: () async {
+        // Stop TTS when back button pressed
+        await _ttsService.stop();
+        await _sttService.dispose();
+        return true;
+      },
+      child: DefaultTabController(
+        length: widget.mindMap != null ? 3 : 2,
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(widget.fileName),
+            backgroundColor: const Color(0xFF4A90E2),
+            bottom: TabBar(
+              tabs: [
+                const Tab(icon: Icon(Icons.notes), text: 'Summary'),
+                const Tab(icon: Icon(Icons.quiz), text: 'Quiz'),
+                if (widget.mindMap != null)
+                  const Tab(icon: Icon(Icons.account_tree), text: 'Mind Map'),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              _buildSummaryTab(),
+              _buildQuizTab(),
+              if (widget.mindMap != null) _buildMindMapTab(),
             ],
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildSummaryTab(),
-            _buildQuizTab(),
-            if (widget.mindMap != null) _buildMindMapTab(),
-          ],
         ),
       ),
     );
   }
 
+  // 🆕 UPDATED: Summary tab with TTS button
   Widget _buildSummaryTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -791,12 +1009,32 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '📝 Summary',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+              // Header with TTS button
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '📝 Summary',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  // 🆕 ADD: TTS Button
+                  IconButton(
+                    onPressed: _toggleSummaryTTS,
+                    icon: AnimatedSwitcher(
+                      duration: Duration(milliseconds: 300),
+                      child: Icon(
+                        _isTTSSpeaking ? Icons.stop_circle : Icons.volume_up,
+                        key: ValueKey(_isTTSSpeaking),
+                        color: _isTTSSpeaking ? Colors.red : Color(0xFF4A90E2),
+                        size: 32,
+                      ),
+                    ),
+                    tooltip: _isTTSSpeaking ? 'Stop Reading' : 'Read Aloud',
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
               Text(
@@ -813,6 +1051,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
   }
 
+  // 🆕 UPDATED: Quiz tab with voice controls
   Widget _buildQuizTab() {
     return widget.quiz.isEmpty
         ? Center(
@@ -976,6 +1215,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
   }
 
+  // 🆕 UPDATED: Quiz card with voice button
   Widget _buildQuizCard(Map<String, dynamic> q, int index) {
     try {
       final question = q['question'] as String? ?? 'Question unavailable';
@@ -998,6 +1238,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       }
 
       final userAnswer = userAnswers[index];
+      final isCurrentVoiceQuestion = _currentQuestionIndex == index;
 
       return Card(
         margin: const EdgeInsets.only(bottom: 16),
@@ -1006,15 +1247,100 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Q${index + 1}. $question',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+              // Question header with voice button
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Q${index + 1}. $question',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // 🆕 ADD: Voice Quiz Button
+                  if (!showResults)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: isCurrentVoiceQuestion 
+                            ? Colors.red.withOpacity(0.1) 
+                            : Color(0xFF4A90E2).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: IconButton(
+                        onPressed: () => _handleVoiceQuiz(index),
+                        icon: AnimatedSwitcher(
+                          duration: Duration(milliseconds: 300),
+                          child: Icon(
+                            isCurrentVoiceQuestion
+                                ? (_isSTTListening ? Icons.mic : Icons.volume_up)
+                                : Icons.mic_none,
+                            key: ValueKey('$isCurrentVoiceQuestion-$_isSTTListening'),
+                            color: isCurrentVoiceQuestion
+                                ? (_isSTTListening ? Colors.red : Colors.orange)
+                                : Color(0xFF4A90E2),
+                            size: 24,
+                          ),
+                        ),
+                        tooltip: isCurrentVoiceQuestion
+                            ? (_isSTTListening ? 'Listening...' : 'Reading...')
+                            : 'Voice Answer',
+                      ),
+                    ),
+                ],
               ),
+              
+              // 🆕 ADD: Voice status indicator
+              if (isCurrentVoiceQuestion) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _isSTTListening 
+                        ? Colors.red.withOpacity(0.1) 
+                        : Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _isSTTListening ? Colors.red : Colors.orange,
+                      width: 2,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(
+                            _isSTTListening ? Colors.red : Colors.orange,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _isSTTListening
+                              ? '🎤 Listening... Say A, B, C, or D'
+                              : '🔊 Reading question aloud...',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _isSTTListening ? Colors.red : Colors.orange,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              
               const SizedBox(height: 12),
               
+              // Options
               ...options.map((opt) {
                 final label = opt['label'] as String? ?? '?';
                 final text = opt['text'] as String? ?? 'Option unavailable';
@@ -1103,6 +1429,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                 );
               }),
               
+              // Correct answer explanation
               if (showResults)
                 Container(
                   margin: const EdgeInsets.only(top: 8),

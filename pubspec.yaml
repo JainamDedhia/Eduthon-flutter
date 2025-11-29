@@ -57,6 +57,11 @@ dependencies:
   
   # State management
   provider: ^6.1.2
+
+  #tts and speech to text
+  flutter_tts: ^4.2.0
+  speech_to_text: ^7.0.0
+  permission_handler: ^11.3.1
   
   # URL launcher
   url_launcher: ^6.3.1
