@@ -19,6 +19,7 @@ import '../../widgets/model_selection_dialog.dart';
 import 'summary_quiz_online_service.dart';
 import 'summary_quiz_offline_service.dart';
 import 'onboarding_content_widgets.dart';
+import 'chatbot_screen.dart';
 
 class SummaryQuizScreen extends StatefulWidget {  
   const SummaryQuizScreen({super.key});
@@ -1315,6 +1316,25 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
           appBar: AppBar(
             title: Text(widget.fileName),
             backgroundColor: const Color(0xFF4A90E2),
+            // 🆕 ADD THIS ACTIONS ARRAY
+            actions: [
+              // Chatbot button - NEW!
+              IconButton(
+                icon: Icon(Icons.chat_bubble_outline, color: Colors.white),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ChatbotScreen(
+                        pdfContext: widget.summary,
+                        fileName: widget.fileName,
+                      ),
+                    ),
+                  );
+                },
+                tooltip: '💬 Ask AI about this content',
+              ),
+            ],
             bottom: TabBar(
               tabs: [
                 Tab(

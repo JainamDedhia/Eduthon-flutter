@@ -15,6 +15,7 @@ import 'screens/teacher/create_class_screen.dart';
 import 'screens/teacher/upload_material_screen.dart';
 import 'screens/student/summary_quiz_screen.dart';
 import 'screens/student/model_download_screen.dart';
+import 'package:claudetest/screens/student/chatbot_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,6 +60,7 @@ class MyApp extends StatelessWidget {
   '/teacher/create-class': (context) => const CreateClassScreen(),
   '/teacher/upload-material': (context) => const UploadMaterialScreen(),
   '/student/model-download': (context) => const ModelDownloadScreen(),
+  '/student/chatbot': (context) => const ChatbotScreen(),
 },
       ),
     );
