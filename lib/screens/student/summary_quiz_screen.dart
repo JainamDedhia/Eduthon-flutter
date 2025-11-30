@@ -1736,109 +1736,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       return const Center(child: Text('No mind map available'));
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
-                children: [
-                  Icon(Icons.account_tree, color: Color(0xFF4A90E2), size: 28),
-                  SizedBox(width: 12),
-                  Text(
-                    '🧠 Mind Map',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              _buildMindMapTree(widget.mindMap!),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMindMapTree(MindMapNode node) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildMindMapNode(node),
-        if (node.children.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Padding(
-            padding: EdgeInsets.only(left: node.level == 0 ? 20.0 : 30.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: node.children
-                  .map((child) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _buildMindMapTree(child),
-                      ))
-                  .toList(),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildMindMapNode(MindMapNode node) {
-    final colors = [
-      const Color(0xFF4A90E2),
-      const Color(0xFF66BB6A),
-      const Color(0xFFFF7043),
-    ];
-
-    final color = colors[node.level.clamp(0, colors.length - 1)];
-    
-    final fontSizes = [20.0, 16.0, 14.0];
-    final fontSize = fontSizes[node.level.clamp(0, fontSizes.length - 1)];
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color, width: 2),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            node.level == 0
-                ? Icons.center_focus_strong
-                : node.level == 1
-                    ? Icons.folder
-                    : Icons.label,
-            color: color,
-            size: fontSize + 4,
-          ),
-          const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              node.title,
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: node.level == 0 
-                    ? FontWeight.bold 
-                    : node.level == 1
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                color: color,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    return _InteractiveMindMap(mindMap: widget.mindMap!, fileName: widget.fileName);
   }
 
   Widget _buildQuizCard(Map<String, dynamic> q, int index) {
@@ -2093,4 +1991,400 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       );
     }
   }
+}
+
+class _InteractiveMindMap extends StatefulWidget {
+  final MindMapNode mindMap;
+  final String fileName;
+
+  const _InteractiveMindMap({required this.mindMap, required this.fileName});
+
+  @override
+  State<_InteractiveMindMap> createState() => _InteractiveMindMapState();
+}
+
+class _InteractiveMindMapState extends State<_InteractiveMindMap> {
+  double _scale = 1.0;
+  double _previousScale = 1.0;
+  Offset _offset = Offset.zero;
+  Offset _previousOffset = Offset.zero;
+  final double _minScale = 0.3;
+  final double _maxScale = 3.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[100],
+      body: Stack(
+        children: [
+          // Background grid with scrollable content
+          Positioned.fill(
+            child: GestureDetector(
+              onScaleStart: (details) {
+                _previousScale = _scale;
+                _previousOffset = details.focalPoint;
+              },
+              onScaleUpdate: (details) {
+                setState(() {
+                  _scale = (_previousScale * details.scale).clamp(_minScale, _maxScale);
+                  
+                  final currentFocal = details.focalPoint;
+                  final delta = currentFocal - _previousOffset;
+                  _offset += delta;
+                  _previousOffset = currentFocal;
+                });
+              },
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: Container(
+                    width: MediaQuery.of(context).size.width * 2, // Extra width for large mind maps
+                    height: MediaQuery.of(context).size.height * 2, // Extra height for large mind maps
+                    child: Stack(
+                      children: [
+                        // Background grid
+                        _buildGrid(),
+                        
+                        // Mind map content
+                        Transform.translate(
+                          offset: _offset,
+                          child: Transform.scale(
+                            scale: _scale,
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.all(40),
+                                child: _buildMindMapTree(widget.mindMap),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Controls
+          Positioned(
+            top: 16,
+            right: 16,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  _buildControlButton(
+                    icon: Icons.zoom_in,
+                    onPressed: () => setState(() {
+                      _scale = (_scale + 0.2).clamp(_minScale, _maxScale);
+                    }),
+                  ),
+                  _buildControlButton(
+                    icon: Icons.zoom_out,
+                    onPressed: () => setState(() {
+                      _scale = (_scale - 0.2).clamp(_minScale, _maxScale);
+                    }),
+                  ),
+                  _buildControlButton(
+                    icon: Icons.center_focus_weak,
+                    onPressed: () => setState(() {
+                      _scale = 1.0;
+                      _offset = Offset.zero;
+                    }),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // File name indicator
+          Positioned(
+            top: 16,
+            left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.account_tree, size: 16, color: Color(0xFF4A90E2)),
+                  SizedBox(width: 8),
+                  Text(
+                    widget.fileName,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGrid() {
+    return CustomPaint(
+      size: Size(MediaQuery.of(context).size.width * 2, MediaQuery.of(context).size.height * 2),
+      painter: _GridPainter(offset: _offset, scale: _scale),
+    );
+  }
+
+  Widget _buildControlButton({required IconData icon, required VoidCallback onPressed}) {
+    return Container(
+      width: 44,
+      height: 44,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onPressed,
+          child: Icon(icon, size: 20, color: Color(0xFF4A90E2)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMindMapTree(MindMapNode node) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildMindMapNode(node),
+        if (node.children.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _buildChildrenConnector(node.level),
+          Wrap(
+            spacing: 40,
+            runSpacing: 40,
+            alignment: WrapAlignment.center,
+            children: node.children.map((child) => _buildMindMapTree(child)).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildChildrenConnector(int level) {
+    return Container(
+      height: 2,
+      width: _nodeChildrenWidth(level),
+      color: _getNodeColor(level).withOpacity(0.3),
+    );
+  }
+
+  double _nodeChildrenWidth(int level) {
+    switch (level) {
+      case 0: return 300;
+      case 1: return 200;
+      default: return 150;
+    }
+  }
+
+  Widget _buildMindMapNode(MindMapNode node) {
+    final color = _getNodeColor(node.level);
+    final isRoot = node.level == 0;
+    
+    return GestureDetector(
+      onTap: () => _showNodeDetails(node),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color, width: isRoot ? 3 : 2),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.2),
+              blurRadius: 8,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildNodeIcon(node),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                node.title,
+                style: TextStyle(
+                  fontSize: _getNodeFontSize(node.level),
+                  fontWeight: isRoot ? FontWeight.bold : FontWeight.w600,
+                  color: color,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (node.children.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '${node.children.length}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNodeIcon(MindMapNode node) {
+    final color = _getNodeColor(node.level);
+    final icon = _getNodeIcon(node.level);
+    
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.2),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: 16, color: color),
+    );
+  }
+
+  IconData _getNodeIcon(int level) {
+    switch (level) {
+      case 0: return Icons.center_focus_strong;
+      case 1: return Icons.category;
+      case 2: return Icons.label_important;
+      default: return Icons.label;
+    }
+  }
+
+  double _getNodeFontSize(int level) {
+    switch (level) {
+      case 0: return 18.0;
+      case 1: return 16.0;
+      case 2: return 14.0;
+      default: return 12.0;
+    }
+  }
+
+  Color _getNodeColor(int level) {
+    final colors = [
+      Color(0xFF4A90E2), // Blue - Root
+      Color(0xFF66BB6A), // Green - Level 1
+      Color(0xFFFF7043), // Orange - Level 2
+      Color(0xFFAB47BC), // Purple - Level 3
+      Color(0xFF26C6DA), // Cyan - Level 4
+    ];
+    return colors[level.clamp(0, colors.length - 1)];
+  }
+
+  void _showNodeDetails(MindMapNode node) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(_getNodeIcon(node.level), color: _getNodeColor(node.level)),
+            SizedBox(width: 8),
+            Text('Node Details'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              node.title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: _getNodeColor(node.level),
+              ),
+            ),
+            SizedBox(height: 12),
+            if (node.children.isNotEmpty)
+              Text(
+                'Child nodes: ${node.children.length}',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            SizedBox(height: 8),
+            Text(
+              'Level: ${node.level}',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GridPainter extends CustomPainter {
+  final Offset offset;
+  final double scale;
+
+  _GridPainter({required this.offset, required this.scale});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey[300]!
+      ..strokeWidth = 0.5;
+
+    final cellSize = 20.0 * scale;
+
+    final startX = -offset.dx % cellSize;
+    final startY = -offset.dy % cellSize;
+
+    for (double x = startX; x < size.width; x += cellSize) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+
+    for (double y = startY; y < size.height; y += cellSize) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
