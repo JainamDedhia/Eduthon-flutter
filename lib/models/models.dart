@@ -198,6 +198,35 @@ class StorageStats {
 }
 
 // Student Progress Model
+class StudentProgress {
+  final String studentId;
+  final String studentName;
+  final int quizAttempts;
+  final double averageScore;
+  final int bestScore;
+  final String latestAttempt;
+  final Map<String, double> materialScores;
+
+  StudentProgress({
+    required this.studentId,
+    required this.studentName,
+    required this.quizAttempts,
+    required this.averageScore,
+    required this.bestScore,
+    required this.latestAttempt,
+    required this.materialScores,
+  });
+
+  // Get color based on average score
+  String get performanceLevel {
+    if (averageScore >= 80) return 'Excellent';
+    if (averageScore >= 60) return 'Good';
+    if (averageScore >= 40) return 'Average';
+    return 'Needs Improvement';
+  }
+}
+
+// Student Progress Model
 class StudentProgressModel {
   final String studentId;
   final String name;
