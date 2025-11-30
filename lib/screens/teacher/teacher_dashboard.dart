@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/firebase_config.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/student_progress_card.dart';
 
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({super.key});
@@ -218,6 +219,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 backgroundColor: const Color(0xFF4A90E2),
               ),
               child: const Text('Upload Material'),
+            ),
+            
+            // Student Progress Analytics Card
+            StudentProgressCard(
+              classCode: classModel.classCode,
+              enrolledStudentsCount: classModel.students.length,
             ),
           ],
         ),
