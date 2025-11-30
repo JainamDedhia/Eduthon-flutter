@@ -13,6 +13,12 @@ import '../../services/onboarding_service.dart';
 import '../../services/tts_service.dart';
 import '../../services/stt_service.dart';
 import '../../services/translation_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import '../../services/server_api_service.dart';
+import '../../widgets/model_selection_dialog.dart';
+import 'summary_quiz_online_service.dart';
+import 'summary_quiz_offline_service.dart';
+import 'onboarding_content_widgets.dart';
 
 class SummaryQuizScreen extends StatefulWidget {  
   const SummaryQuizScreen({super.key});
@@ -63,30 +69,30 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   void _showOnboarding() {
     final targets = <TargetFocus>[];
   
-  targets.add(
-    TargetFocus(
-      identify: "generate_button",
-      keyTarget: _firstGenerateButtonKey,
-      alignSkip: Alignment.topRight,
-      enableOverlayTab: true,
-      paddingFocus: 3, // ✅ REDUCED for buttons (even smaller)
-      radius: 8, // ✅ ADD smaller radius for buttons
-      contents: [
-        TargetContent(
-          align: ContentAlign.top,
-          builder: (context, controller) {
-            return _buildOnboardingContent(
-              icon: Icons.auto_awesome,
-              title: '✨ Generate AI Content',
-              description: 'Tap this button to create:\n• Summary\n• Quiz questions\n• Mind map',
-              onNext: () => controller.next(),
-              onSkip: () => _skipOnboarding(controller),
-            );
-          },
-        ),
-      ],
-    ),
-  );
+    targets.add(
+      TargetFocus(
+        identify: "generate_button",
+        keyTarget: _firstGenerateButtonKey,
+        alignSkip: Alignment.topRight,
+        enableOverlayTab: true,
+        paddingFocus: 3,
+        radius: 8,
+        contents: [
+          TargetContent(
+            align: ContentAlign.top,
+            builder: (context, controller) {
+              return OnboardingContentWidgets.buildOnboardingContent(
+                icon: Icons.auto_awesome,
+                title: '✨ Generate AI Content',
+                description: 'Tap this button to create:\n• Summary\n• Quiz questions\n• Mind map',
+                onNext: () => controller.next(),
+                onSkip: () => _skipOnboarding(controller),
+              );
+            },
+          ),
+        ],
+      ),
+    );
     
     targets.add(
       TargetFocus(
@@ -98,7 +104,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
           TargetContent(
             align: ContentAlign.top,
             builder: (context, controller) {
-              return _buildOnboardingContent(
+              return OnboardingContentWidgets.buildOnboardingContent(
                 icon: Icons.visibility,
                 title: '👁️ View Results',
                 description: 'After generating, tap here to:\n• Read summary\n• Take quiz\n• See mind map',
@@ -129,95 +135,6 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     _tutorialCoachMark?.show(context: context);
   }
 
-  Widget _buildOnboardingContent({
-    required IconData icon,
-    required String title,
-    required String description,
-    required VoidCallback onNext,
-    required VoidCallback onSkip,
-    bool isLast = false,
-  }) {
-  return Container(
-    padding: EdgeInsets.all(16), // 🆕 REDUCED from 20 to 16
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black26,
-          blurRadius: 10,
-          offset: Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 🆕 FIX: Smaller circle container
-        Container(
-          padding: EdgeInsets.all(12), // 🆕 REDUCED from 16 to 12
-          decoration: BoxDecoration(
-            color: Color(0xFF4A90E2).withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, size: 36, color: Color(0xFF4A90E2)), // 🆕 REDUCED from 48 to 36
-        ),
-        SizedBox(height: 12), // 🆕 REDUCED from 16 to 12
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 18, // 🆕 REDUCED from 22 to 18
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: 8), // 🆕 REDUCED from 12 to 8
-        Text(
-          description,
-          style: TextStyle(
-            fontSize: 13, // 🆕 REDUCED from 16 to 13
-            color: Colors.black54,
-            height: 1.4, // 🆕 REDUCED from 1.5 to 1.4
-          ),
-          textAlign: TextAlign.center,
-        ),
-        SizedBox(height: 16), // 🆕 REDUCED from 24 to 16
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            TextButton(
-              onPressed: onSkip,
-              child: Text(
-                'Skip',
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]), // 🆕 REDUCED font
-              ),
-            ),
-            ElevatedButton(
-              onPressed: onNext,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF4A90E2),
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8), // 🆕 REDUCED padding
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Text(
-                isLast ? '✓ Got it!' : 'Next →',
-                style: TextStyle(
-                  fontSize: 13, // 🆕 REDUCED from 16 to 13
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
-
   void _skipOnboarding(TutorialCoachMarkController controller) {
     controller.skip();
     OnboardingService.markSummaryQuizCompleted();
@@ -245,162 +162,40 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   }
 
   Future<void> _generateSummaryQuizAndMindMap(FileRecord file) async {
-    final modelAvailable = await LLMSummaryService.isModelAvailable();
-    
-    String? selectedLanguage;
-    
-    if (modelAvailable && mounted) {
-      selectedLanguage = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.language, color: Color(0xFF4A90E2)),
-              SizedBox(width: 8),
-              Text('Select Language'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '🤖 AI Model detected!\nChoose summary language:',
-                style: TextStyle(fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
-              const SizedBox(height: 12),
-              _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
-              const SizedBox(height: 12),
-              _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
-            ],
-          ),
-        ),
-      );
-      
-      if (selectedLanguage == null) return;
-    }
+    // Step 1: Check internet connectivity
+    final isOnline = await SummaryQuizOnlineService.checkConnectivity();
 
-    setState(() {
-      _processingFile = file.name;
-      _progress = 0.0;
-    });
-
-    try {
-      print('🔄 Starting generation for: ${file.name}');
-
-      setState(() => _progress = 0.15);
-      final text = await SummaryGenerator.extractTextFromPDF(file.localPath);
-      
-      if (text.isEmpty) {
-        throw Exception('Could not extract text from PDF');
-      }
-
-      String summary;
-      List<Map<String, dynamic>> quiz;
-
-      if (modelAvailable && selectedLanguage != null) {
-        setState(() => _progress = 0.4);
-        summary = await LLMSummaryService.generateSummaryWithLLM(
-          text: text,
-          language: selectedLanguage,
-        );
-
-        setState(() => _progress = 0.65);
-        quiz = await LLMSummaryService.generateQuizWithLLM(
-          summary: summary,
-          language: selectedLanguage,
-          numQuestions: 5,
-        );
-      } else {
-        setState(() => _progress = 0.4);
-        summary = await SummaryGenerator.generateSummary(text);
-
-        setState(() => _progress = 0.65);
-        quiz = await SummaryGenerator.generateQuiz(summary);
-      }
-
-      setState(() => _progress = 0.85);
-      print('🧠 Generating mind map...');
-      
-      final mindMap = await MindMapGenerator.generateMindMap(
-        summary: summary,
-        quiz: quiz,
-        fileName: file.name,
-      );
-
-      setState(() => _progress = 1.0);
-      
-      await OfflineDB.saveSummaryAndQuiz(
-        file.classCode,
-        file.name,
-        summary,
-        quiz,
-      );
-
-      await OfflineDB.saveMindMap(
-        file.classCode,
-        file.name,
-        mindMap.toJson(),
-      );
-
-      print('✅ Summary, Quiz, and Mind Map saved');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              modelAvailable 
-                ? '✅ Generated with AI! Summary, Quiz & Mind Map ready!'
-                : '✅ Summary, Quiz & Mind Map generated!',
-            ),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      print('❌ Error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      setState(() {
-        _processingFile = null;
-        _progress = 0.0;
-      });
+    if (isOnline) {
+      // Online: Show model selection dialog
+      print('🌐 [SummaryQuiz] Online mode - showing model selection');
+      await _generateWithServerAPI(file);
+    } else {
+      // Offline: Use local model or rule-based
+      print('📴 [SummaryQuiz] Offline mode - using local generation');
+      await _generateOfflineMode(file);
     }
   }
-  
-  Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
-    return InkWell(
-      onTap: () => Navigator.pop(context, code),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE3F2FD),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF4A90E2)),
-        ),
-        child: Row(
-          children: [
-            Text(flag, style: const TextStyle(fontSize: 24)),
-            const SizedBox(width: 12),
-            Text(
-              name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
+
+  Future<void> _generateWithServerAPI(FileRecord file) async {
+    await SummaryQuizOnlineService.generateWithServerAPI(
+      context: context,
+      file: file,
+      setProcessingFile: (value) => setState(() => _processingFile = value),
+      setProgress: (value) => setState(() => _progress = value),
+      onSuccess: () => print('✅ Online generation completed'),
+      onError: (e) => print('❌ Online generation failed: $e'),
+      onFallbackToOffline: () => _generateOfflineMode(file),
+    );
+  }
+
+  Future<void> _generateOfflineMode(FileRecord file) async {
+    await SummaryQuizOfflineService.generateOfflineMode(
+      context: context,
+      file: file,
+      setProcessingFile: (value) => setState(() => _processingFile = value),
+      setProgress: (value) => setState(() => _progress = value),
+      onSuccess: () => print('✅ Offline generation completed'),
+      onError: (e) => print('❌ Offline generation failed: $e'),
     );
   }
 
@@ -549,6 +344,33 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
             _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
             const SizedBox(height: 12),
             _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
+    return InkWell(
+      onTap: () => Navigator.pop(context, code),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE3F2FD),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF4A90E2)),
+        ),
+        child: Row(
+          children: [
+            Text(flag, style: const TextStyle(fontSize: 24)),
+            const SizedBox(width: 12),
+            Text(
+              name,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ],
         ),
       ),
@@ -1036,7 +858,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
           TargetContent(
             align: ContentAlign.bottom,
             builder: (context, controller) {
-              return _buildResultOnboardingContent(
+              return OnboardingContentWidgets.buildResultOnboardingContent(
                 icon: Icons.notes,
                 title: '📝 Summary Tab',
                 description: 'Read the AI-generated summary of your PDF content here.',
@@ -1059,7 +881,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
           TargetContent(
             align: ContentAlign.left,
             builder: (context, controller) {
-              return _buildResultOnboardingContent(
+              return OnboardingContentWidgets.buildResultOnboardingContent(
                 icon: Icons.volume_up,
                 title: '🔊 Read Aloud',
                 description: 'Tap this button to hear the summary read aloud in your selected language.',
@@ -1082,7 +904,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
           TargetContent(
             align: ContentAlign.bottom,
             builder: (context, controller) {
-              return _buildResultOnboardingContent(
+              return OnboardingContentWidgets.buildResultOnboardingContent(
                 icon: Icons.quiz,
                 title: '📝 Quiz Tab',
                 description: 'Test your knowledge with AI-generated quiz questions.',
@@ -1106,7 +928,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
             TargetContent(
               align: ContentAlign.left,
               builder: (context, controller) {
-                return _buildResultOnboardingContent(
+                return OnboardingContentWidgets.buildResultOnboardingContent(
                   icon: Icons.mic,
                   title: '🎤 Voice Quiz',
                   description: 'Answer quiz questions using your voice! The app will read the question and listen for your answer (A, B, C, or D).',
@@ -1132,7 +954,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
             TargetContent(
               align: ContentAlign.bottom,
               builder: (context, controller) {
-                return _buildResultOnboardingContent(
+                return OnboardingContentWidgets.buildResultOnboardingContent(
                   icon: Icons.account_tree,
                   title: '🧠 Mind Map',
                   description: 'Visualize the key concepts and their relationships in an interactive mind map.',
@@ -1161,94 +983,6 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
     
     _resultTutorialCoachMark?.show(context: context);
-  }
-
-  Widget _buildResultOnboardingContent({
-    required IconData icon,
-    required String title,
-    required String description,
-    required VoidCallback onNext,
-    required VoidCallback onSkip,
-    bool isLast = false,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Color(0xFF4A90E2).withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 48, color: Color(0xFF4A90E2)),
-          ),
-          SizedBox(height: 16),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 12),
-          Text(
-            description,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.black54,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: onSkip,
-                child: Text(
-                  'Skip',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-              ),
-              ElevatedButton(
-                onPressed: onNext,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF4A90E2),
-                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: Text(
-                  isLast ? '✓ Got it!' : 'Next →',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 
   void _skipResultOnboarding(TutorialCoachMarkController controller) {
