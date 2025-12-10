@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/firebase_config.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/student_progress_widget.dart';
+import '../../widgets/student_progress_card.dart';
 
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({super.key});
@@ -15,6 +17,7 @@ class TeacherDashboard extends StatefulWidget {
 class _TeacherDashboardState extends State<TeacherDashboard> {
   List<ClassModel> _classes = [];
   bool _loading = true;
+  String? _expandedClassId; // Track which class card is expanded
 
   @override
   void initState() {
@@ -163,6 +166,68 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
     );
   }
 
+  Widget _buildProgressSection(ClassModel classModel) {
+    final isExpanded = _expandedClassId == classModel.id;
+    
+    return Column(
+      children: [
+        InkWell(
+          onTap: () {
+            setState(() {
+              _expandedClassId = isExpanded ? null : classModel.id;
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            decoration: BoxDecoration(
+              color: isExpanded 
+                  ? const Color(0xFF4A90E2).withOpacity(0.1)
+                  : Colors.grey[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.analytics,
+                      color: const Color(0xFF4A90E2),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Student Progress Report',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: isExpanded 
+                            ? const Color(0xFF4A90E2)
+                            : Colors.grey[800],
+                      ),
+                    ),
+                  ],
+                ),
+                Icon(
+                  isExpanded 
+                      ? Icons.expand_less 
+                      : Icons.expand_more,
+                  color: const Color(0xFF4A90E2),
+                ),
+              ],
+            ),
+          ),
+        ),
+        
+        // Progress Widget (shown when expanded)
+        if (isExpanded) ...[
+          const SizedBox(height: 16),
+          StudentProgressWidget(classCode: classModel.classCode),
+        ],
+      ],
+    );
+  }
+
   Widget _buildClassCard(ClassModel classModel) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -219,6 +284,12 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
               ),
               child: const Text('Upload Material'),
             ),
+            
+            // Divider before progress section
+            const Divider(height: 24),
+            
+            // Expandable Student Progress Section
+            _buildProgressSection(classModel),
           ],
         ),
       ),

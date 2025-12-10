@@ -163,20 +163,40 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   }
 
   Future<void> _generateSummaryQuizAndMindMap(FileRecord file) async {
-    // Step 1: Check internet connectivity
-    final isOnline = await SummaryQuizOnlineService.checkConnectivity();
+  // Check connectivity first
+  final isOnline = await SummaryQuizOnlineService.checkConnectivity();
 
-    if (isOnline) {
-      // Online: Show model selection dialog
-      print('🌐 [SummaryQuiz] Online mode - showing model selection');
-      await _generateWithServerAPI(file);
-    } else {
-      // Offline: Use local model or rule-based
-      print('📴 [SummaryQuiz] Offline mode - using local generation');
-      await _generateOfflineMode(file);
-    }
+  if (!isOnline) {
+    // No internet - use offline mode directly
+    print('📴 [SummaryQuiz] No internet - using offline mode');
+    await _generateOfflineMode(file);
+    return;
   }
 
+  // Has internet - check if server is healthy
+  print('🌐 [SummaryQuiz] Checking server health...');
+  final serverHealthy = await ServerAPIService.isServerHealthy();
+
+  if (serverHealthy) {
+    // Server is up - show model selection
+    print('✅ [SummaryQuiz] Server healthy - showing model selection');
+    await _generateWithServerAPI(file);
+  } else {
+    // Server is down - fallback to offline
+    print('⚠️ [SummaryQuiz] Server unreachable - using offline mode');
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('📴 Server unavailable - using offline mode'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+    
+    await _generateOfflineMode(file);
+  }
+}
   Future<void> _generateWithServerAPI(FileRecord file) async {
     await SummaryQuizOnlineService.generateWithServerAPI(
       context: context,

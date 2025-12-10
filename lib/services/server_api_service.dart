@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class ServerAPIService {
   // 🔥 IMPORTANT: Replace with your ngrok/localtunnel URL
-  static const String BASE_URL = "https://slow-jobs-sip.loca.lt";
+  static const String BASE_URL = "https://fluffy-bars-attend.loca.lt";
   
   // Request timeout
   static const Duration TIMEOUT = Duration(seconds: 30);

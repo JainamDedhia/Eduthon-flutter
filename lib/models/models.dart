@@ -196,3 +196,152 @@ class StorageStats {
     );
   }
 }
+
+// Student Progress Model
+class StudentProgress {
+  final String studentId;
+  final String studentName;
+  final int quizAttempts;
+  final double averageScore;
+  final int bestScore;
+  final String latestAttempt;
+  final Map<String, double> materialScores;
+
+  StudentProgress({
+    required this.studentId,
+    required this.studentName,
+    required this.quizAttempts,
+    required this.averageScore,
+    required this.bestScore,
+    required this.latestAttempt,
+    required this.materialScores,
+  });
+
+  // Get color based on average score
+  String get performanceLevel {
+    if (averageScore >= 80) return 'Excellent';
+    if (averageScore >= 60) return 'Good';
+    if (averageScore >= 40) return 'Average';
+    return 'Needs Improvement';
+  }
+}
+
+// Student Progress Model
+class StudentProgressModel {
+  final String studentId;
+  final String name;
+  final String email;
+  final int quizzesTaken;
+  final double averageScore; // percentage (0-100)
+  final DateTime lastActivityDate;
+  final bool isActive;
+
+  StudentProgressModel({
+    required this.studentId,
+    required this.name,
+    required this.email,
+    required this.quizzesTaken,
+    required this.averageScore,
+    required this.lastActivityDate,
+    required this.isActive,
+  });
+
+  factory StudentProgressModel.fromMap(Map<String, dynamic> data) {
+    return StudentProgressModel(
+      studentId: data['studentId'] ?? '',
+      name: data['name'] ?? '',
+      email: data['email'] ?? '',
+      quizzesTaken: data['quizzesTaken'] ?? 0,
+      averageScore: (data['averageScore'] ?? 0).toDouble(),
+      lastActivityDate: data['lastActivityDate'] != null
+          ? DateTime.parse(data['lastActivityDate'])
+          : DateTime.now(),
+      isActive: data['isActive'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'studentId': studentId,
+      'name': name,
+      'email': email,
+      'quizzesTaken': quizzesTaken,
+      'averageScore': averageScore,
+      'lastActivityDate': lastActivityDate.toIso8601String(),
+      'isActive': isActive,
+    };
+  }
+
+  String get statusText => isActive ? 'Active' : 'Inactive';
+  
+  String get lastActivityText {
+    final now = DateTime.now();
+    final difference = now.difference(lastActivityDate);
+    
+    if (difference.inDays == 0) {
+      return 'Today';
+    } else if (difference.inDays == 1) {
+      return 'Yesterday';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} days ago';
+    } else if (difference.inDays < 30) {
+      return '${(difference.inDays / 7).floor()} weeks ago';
+    } else {
+      return '${(difference.inDays / 30).floor()} months ago';
+    }
+  }
+}
+
+// Class Analytics Model
+class ClassAnalytics {
+  final int totalStudents;
+  final double averageClassScore;
+  final double completionRate; // percentage (0-100)
+  final int activeStudents;
+  final int inactiveStudents;
+  final List<StudentProgressModel> students;
+
+  ClassAnalytics({
+    required this.totalStudents,
+    required this.averageClassScore,
+    required this.completionRate,
+    required this.activeStudents,
+    required this.inactiveStudents,
+    required this.students,
+  });
+
+  factory ClassAnalytics.fromStudents(List<StudentProgressModel> students) {
+    final totalStudents = students.length;
+    final activeStudents = students.where((s) => s.isActive).length;
+    final studentsWithQuizzes = students.where((s) => s.quizzesTaken > 0).toList();
+    
+    final averageScore = studentsWithQuizzes.isEmpty
+        ? 0.0
+        : studentsWithQuizzes.map((s) => s.averageScore).reduce((a, b) => a + b) /
+            studentsWithQuizzes.length;
+    
+    final completionRate = totalStudents == 0
+        ? 0.0
+        : (studentsWithQuizzes.length / totalStudents) * 100;
+
+    return ClassAnalytics(
+      totalStudents: totalStudents,
+      averageClassScore: averageScore,
+      completionRate: completionRate,
+      activeStudents: activeStudents,
+      inactiveStudents: totalStudents - activeStudents,
+      students: students,
+    );
+  }
+
+  factory ClassAnalytics.empty() {
+    return ClassAnalytics(
+      totalStudents: 0,
+      averageClassScore: 0.0,
+      completionRate: 0.0,
+      activeStudents: 0,
+      inactiveStudents: 0,
+      students: [],
+    );
+  }
+}
