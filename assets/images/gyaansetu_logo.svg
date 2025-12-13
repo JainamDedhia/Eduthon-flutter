@@ -1,0 +1,19 @@
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" fill-rule="evenodd">
+    <circle cx="120" cy="120" r="118" fill="#FFF9F3" stroke="#E3DDD3" stroke-width="4"/>
+    <g transform="translate(44 36)">
+      <path d="M76 96c0-26 14-50 36-64-4 22-2 40 6 56 8 16 2 34-14 42-10 5-20 7-28 7V96z" fill="#E46A25"/>
+      <path d="M76 96c0-26-14-50-36-64 4 22 2 40-6 56-8 16-2 34 14 42 10 5 20 7 28 7V96z" fill="#EA7D3A"/>
+      <path d="M76 146c-10 0-22-3-34-9-16-9-24-28-18-46 18 7 35 8 52 3v52z" fill="#F4A340"/>
+      <path d="M76 146c10 0 22-3 34-9 16-9 24-28 18-46-18 7-35 8-52 3v52z" fill="#E87420"/>
+      <path d="M76 146c-10 0-18-9-18-20 0-17 12-26 18-30v50z" fill="#1B7F5F"/>
+      <path d="M76 146c10 0 18-9 18-20 0-17-12-26-18-30v50z" fill="#2E9C72"/>
+      <path d="M76 160c-8 0-16-1-24-3 8-4 17-7 24-12 7 5 16 8 24 12-8 2-16 3-24 3z" fill="#CC5C1C"/>
+      <circle cx="76" cy="86" r="6" fill="#FDF1E6"/>
+    </g>
+    <g transform="translate(24 20)" stroke="#E46A25" stroke-width="6" stroke-linecap="round">
+      <path d="M36 38l10 10M178 38l-10 10M36 174l10-10M178 174l-10-10M54 24l8 12M160 24l-8 12M24 92h16M176 92h16M92 16v16M140 16v16"/>
+    </g>
+  </g>
+</svg>
+

@@ -1,0 +1,126 @@
+{
+  "project_info": {
+    "project_number": "829045368261",
+    "project_id": "medical-9530c",
+    "storage_bucket": "medical-9530c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:829045368261:android:9382d35f34b6a76f1997ac",
+        "android_client_info": {
+          "package_name": "com.example.apptest"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "829045368261-866ead2rmbcv2c653s2s5pssvnans1if.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkRR3hEW9ZG---AF2sTBZHfoXiAFtAMjo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "829045368261-866ead2rmbcv2c653s2s5pssvnans1if.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "829045368261-lefahsd6gnr8qnrplvaed1pum868b8i5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.apptest"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:829045368261:android:828e09bdd15d7d701997ac",
+        "android_client_info": {
+          "package_name": "com.example.claudetest"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "829045368261-866ead2rmbcv2c653s2s5pssvnans1if.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkRR3hEW9ZG---AF2sTBZHfoXiAFtAMjo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "829045368261-866ead2rmbcv2c653s2s5pssvnans1if.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "829045368261-lefahsd6gnr8qnrplvaed1pum868b8i5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.apptest"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:829045368261:android:3a1418d1599554a41997ac",
+        "android_client_info": {
+          "package_name": "com.example.medical"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "829045368261-8kppgvkucv88bo095kag7uiin5mo9ig4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.medical",
+            "certificate_hash": "b449c2e20e68d7058a288d1156603988f07d96cd"
+          }
+        },
+        {
+          "client_id": "829045368261-866ead2rmbcv2c653s2s5pssvnans1if.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkRR3hEW9ZG---AF2sTBZHfoXiAFtAMjo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "829045368261-866ead2rmbcv2c653s2s5pssvnans1if.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "829045368261-lefahsd6gnr8qnrplvaed1pum868b8i5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.apptest"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
