@@ -1,7 +1,8 @@
 // FILE: lib/screens/student/chatbot_screen.dart
-// FIXED VERSION - Better error handling and history management
+// HYBRID VERSION - Online Server + Offline RAG Fallback
 import 'package:flutter/material.dart';
 import '../../services/server_api_service.dart';
+import '../../services/offline_rag_service.dart';
 
 class ChatbotScreen extends StatefulWidget {
   final String? pdfContext;
@@ -23,6 +24,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
   String _selectedModel = 'fast';
+  
+  // Track mode for UI
+  String _currentMode = 'online'; // 'online', 'offline_rag'
+  bool _isOfflineMode = false;
 
   @override
   void initState() {
@@ -33,6 +38,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           ? "Hi! I've read ${widget.fileName ?? 'your document'}. Ask me anything about it!"
           : "Hi! I'm your AI tutor. How can I help you today?",
       isUser: false,
+      isFromDocument: false,
     ));
   }
 
@@ -48,7 +54,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
 
     final userMessage = message.trim();
     setState(() {
-      _messages.add(ChatMessage(text: userMessage, isUser: true));
+      _messages.add(ChatMessage(text: userMessage, isUser: true, isFromDocument: false));
       _isLoading = true;
     });
 
@@ -56,10 +62,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     _scrollToBottom();
 
     try {
-      // Build history for API - FIXED: Only include actual conversation
+      // Build history
       final history = <Map<String, String>>[];
-      
-      // Add previous messages (skip welcome message at index 0)
       for (int i = 1; i < _messages.length - 1; i++) {
         final msg = _messages[i];
         history.add({
@@ -70,48 +74,99 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
 
       print('💬 Sending chat with ${history.length} history messages');
 
-      // Call chatbot API
-      final response = await ServerAPIService.chat(
-        message: userMessage,
-        context: widget.pdfContext ?? "",
-        history: history,
-        model: _selectedModel,
-      );
+      // TRY ONLINE FIRST
+      setState(() => _currentMode = 'online');
+      try {
+        final response = await ServerAPIService.chat(
+          message: userMessage,
+          context: widget.pdfContext ?? "",
+          history: history,
+          model: _selectedModel,
+        );
 
-      setState(() {
-        _messages.add(ChatMessage(
-          text: response,
-          isUser: false,
-        ));
-        _isLoading = false;
-      });
+        setState(() {
+          _messages.add(ChatMessage(
+            text: response,
+            isUser: false,
+            isFromDocument: false,
+          ));
+          _isLoading = false;
+        });
+
+      } catch (onlineError) {
+        print('❌ Online chat failed: $onlineError');
+        
+        // CHECK IF WE CAN FALLBACK TO OFFLINE RAG
+        final canUseRAG = widget.pdfContext != null && widget.pdfContext!.isNotEmpty;
+        
+        if (canUseRAG && onlineError.toString().contains('Failed host lookup') || 
+            onlineError.toString().contains('timed out') ||
+            onlineError.toString().contains('Server error')) {
+          
+          print('🔄 Falling back to Offline RAG...');
+          setState(() {
+            _currentMode = 'offline_rag';
+            _isOfflineMode = true;
+          });
+          
+          final ragResponse = await OfflineRAGService.answerQuestion(
+            question: userMessage,
+            documentText: widget.pdfContext,
+            conversationHistory: history,
+          );
+          
+          if (ragResponse != null) {
+            // RAG succeeded
+            setState(() {
+              _messages.add(ChatMessage(
+                text: "📄 (Offline Mode) $ragResponse",
+                isUser: false,
+                isFromDocument: true,
+              ));
+              _isLoading = false;
+            });
+          } else {
+            // RAG also failed
+            _addErrorMessage("I'm offline and couldn't find relevant information in your document. Please try rephrasing or check your connection.");
+          }
+          
+        } else {
+          // Can't use RAG or not a network error
+          _addErrorMessage(_getUserFriendlyError(onlineError.toString()));
+        }
+      }
 
       _scrollToBottom();
     } catch (e) {
-      print('❌ Chat error: $e');
-      
-      // Show user-friendly error message
-      String errorMessage;
-      if (e.toString().contains('Rate limit')) {
-        errorMessage = "I'm getting too many requests right now. Please wait a moment and try again.";
-      } else if (e.toString().contains('timed out')) {
-        errorMessage = "The request took too long. Please check your connection and try again.";
-      } else if (e.toString().contains('Server error')) {
-        errorMessage = "The AI service is temporarily unavailable. Please try again in a few moments.";
-      } else {
-        errorMessage = "I'm having trouble responding right now. Please try again.\n\nError: ${e.toString().split(':').last.trim()}";
-      }
-      
-      setState(() {
-        _messages.add(ChatMessage(
-          text: errorMessage,
-          isUser: false,
-          isError: true,
-        ));
-        _isLoading = false;
-      });
-      
+      print('❌ Unexpected error: $e');
+      _addErrorMessage("Something went wrong. Please try again.");
       _scrollToBottom();
+    }
+  }
+
+  void _addErrorMessage(String errorMessage) {
+    setState(() {
+      _messages.add(ChatMessage(
+        text: errorMessage,
+        isUser: false,
+        isError: true,
+        isFromDocument: false,
+      ));
+      _isLoading = false;
+    });
+  }
+
+  String _getUserFriendlyError(String error) {
+    if (error.contains('Rate limit')) {
+      return "I'm getting too many requests right now. Please wait a moment and try again.";
+    } else if (error.contains('timed out')) {
+      return "The request took too long. Switching to offline mode...";
+    } else if (error.contains('Server error')) {
+      return "The AI service is temporarily unavailable. Using offline document search instead.";
+    } else if (error.contains('Failed host lookup')) {
+      return "No internet connection. Searching your document offline...";
+    } else {
+      return "I'm having trouble responding right now. Please try again.";
     }
   }
 
@@ -130,14 +185,30 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   void _clearChat() {
     setState(() {
       _messages.clear();
-      // Add welcome message back
       _messages.add(ChatMessage(
         text: widget.pdfContext != null && widget.pdfContext!.isNotEmpty
             ? "Hi! I've read ${widget.fileName ?? 'your document'}. Ask me anything about it!"
             : "Hi! I'm your AI tutor. How can I help you today?",
         isUser: false,
+        isFromDocument: false,
       ));
+      _currentMode = 'online';
+      _isOfflineMode = false;
     });
+  }
+
+  String get _modeIndicatorText {
+    if (_currentMode == 'offline_rag') {
+      return '📚 Offline Document Search';
+    }
+    return '🌐 Online AI Mode';
+  }
+
+  String get _loadingText {
+    if (_currentMode == 'offline_rag') {
+      return 'Searching your document...';
+    }
+    return 'AI is thinking...';
   }
 
   @override
@@ -162,20 +233,22 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
         ),
         backgroundColor: Color(0xFF4A90E2),
         actions: [
-          // Clear chat button
           if (_messages.length > 1)
             IconButton(
               icon: Icon(Icons.clear_all),
               onPressed: _clearChat,
               tooltip: 'Clear chat',
             ),
-          // Model selector
+          // Model selector (disabled when offline)
           PopupMenuButton<String>(
             icon: Icon(Icons.tune),
-            onSelected: (value) => setState(() => _selectedModel = value),
+            onSelected: _isOfflineMode 
+                ? null 
+                : (value) => setState(() => _selectedModel = value),
             itemBuilder: (context) => [
               PopupMenuItem(
                 value: 'fast',
+                enabled: !_isOfflineMode,
                 child: Row(
                   children: [
                     Icon(Icons.bolt, color: Colors.orange, size: 20),
@@ -190,6 +263,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               ),
               PopupMenuItem(
                 value: 'balanced',
+                enabled: !_isOfflineMode,
                 child: Row(
                   children: [
                     Icon(Icons.balance, color: Colors.blue, size: 20),
@@ -204,6 +278,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               ),
               PopupMenuItem(
                 value: 'best',
+                enabled: !_isOfflineMode,
                 child: Row(
                   children: [
                     Icon(Icons.star, color: Colors.green, size: 20),
@@ -216,12 +291,45 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                   ],
                 ),
               ),
+              if (_isOfflineMode)
+                PopupMenuItem(
+                  enabled: false,
+                  child: Text(
+                    'Online models unavailable offline',
+                    style: TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ),
             ],
           ),
         ],
       ),
       body: Column(
         children: [
+          // Mode indicator (subtle)
+          if (_isOfflineMode)
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(vertical: 6),
+              color: Colors.blue[50],
+              child: Center(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.wifi_off, size: 14, color: Colors.grey[700]),
+                    SizedBox(width: 6),
+                    Text(
+                      _modeIndicatorText,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // Chat messages
           Expanded(
             child: _messages.isEmpty
@@ -229,12 +337,24 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+                        Icon(
+                          widget.pdfContext != null ? Icons.description : Icons.chat_bubble_outline,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
                         SizedBox(height: 16),
                         Text(
-                          'Start a conversation with AI',
+                          widget.pdfContext != null
+                              ? 'Ask questions about your document'
+                              : 'Start a conversation with AI',
                           style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                         ),
+                        SizedBox(height: 8),
+                        if (widget.pdfContext != null)
+                          Text(
+                            'Will work online or offline',
+                            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                          ),
                       ],
                     ),
                   )
@@ -259,12 +379,14 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation(Color(0xFF4A90E2)),
+                      valueColor: AlwaysStoppedAnimation(
+                        _isOfflineMode ? Colors.blue : Color(0xFF4A90E2),
+                      ),
                     ),
                   ),
                   SizedBox(width: 12),
                   Text(
-                    'AI is thinking...',
+                    _loadingText,
                     style: TextStyle(
                       color: Colors.grey[600],
                       fontSize: 14,
@@ -294,7 +416,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                     child: TextField(
                       controller: _messageController,
                       decoration: InputDecoration(
-                        hintText: 'Ask me anything...',
+                        hintText: widget.pdfContext != null
+                            ? 'Ask about your document...'
+                            : 'Ask me anything...',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
@@ -316,7 +440,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
+                        colors: _isOfflineMode
+                            ? [Colors.blue[400]!, Colors.blue[600]!]
+                            : [Color(0xFF4A90E2), Color(0xFF357ABD)],
                       ),
                       shape: BoxShape.circle,
                     ),
@@ -348,13 +474,21 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             Container(
               padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: message.isError ? Colors.red : Color(0xFF4A90E2),
+                color: message.isError 
+                    ? Colors.red
+                    : message.isFromDocument
+                      ? Colors.blue
+                      : Color(0xFF4A90E2),
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                message.isError ? Icons.error : Icons.smart_toy, 
-                color: Colors.white, 
-                size: 20
+                message.isError 
+                    ? Icons.error 
+                    : message.isFromDocument
+                      ? Icons.search
+                      : Icons.smart_toy,
+                color: Colors.white,
+                size: 20,
               ),
             ),
             SizedBox(width: 8),
@@ -367,7 +501,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                     ? Color(0xFF4A90E2)
                     : message.isError
                         ? Colors.red[50]
-                        : Colors.white,
+                        : message.isFromDocument
+                          ? Colors.blue[50]
+                          : Colors.white,
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(16),
                   topRight: Radius.circular(16),
@@ -385,19 +521,36 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                 ],
                 border: message.isError 
                     ? Border.all(color: Colors.red[300]!, width: 1)
-                    : null,
+                    : message.isFromDocument
+                      ? Border.all(color: Colors.blue[100]!, width: 1)
+                      : null,
               ),
-              child: Text(
-                message.text,
-                style: TextStyle(
-                  color: message.isUser
-                      ? Colors.white
-                      : message.isError
-                          ? Colors.red[800]
-                          : Colors.black87,
-                  fontSize: 15,
-                  height: 1.4,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (message.isFromDocument && !message.isError)
+                    Text(
+                      '📄 From your document:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.blue[700],
+                      ),
+                    ),
+                  if (message.isFromDocument && !message.isError) SizedBox(height: 4),
+                  Text(
+                    message.text,
+                    style: TextStyle(
+                      color: message.isUser
+                          ? Colors.white
+                          : message.isError
+                              ? Colors.red[800]
+                              : Colors.black87,
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -422,10 +575,12 @@ class ChatMessage {
   final String text;
   final bool isUser;
   final bool isError;
+  final bool isFromDocument;
 
   ChatMessage({
     required this.text,
     required this.isUser,
     this.isError = false,
+    this.isFromDocument = false,
   });
 }

@@ -25,6 +25,21 @@ class _MindMapScreenState extends State<MindMapScreen> {
   final double _maxScale = 3.0;
 
   @override
+  void initState() {
+    super.initState();
+    // Delay to ensure proper layout
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          // Reset to center on load
+          _offset = Offset.zero;
+          _scale = 1.0;
+        });
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -46,15 +61,16 @@ class _MindMapScreenState extends State<MindMapScreen> {
         },
         child: Stack(
           children: [
-            // Background grid
-            _buildGrid(),
+            // Background grid - FIXED: Full screen
+            Positioned.fill(child: _buildGrid()),
             
-            // Mind map content
-            Transform.translate(
-              offset: _offset,
-              child: Transform.scale(
-                scale: _scale,
-                child: Center(
+            // Mind map content - FIXED: Proper centering with Align
+            Align(
+              alignment: Alignment.center,
+              child: Transform.translate(
+                offset: _offset,
+                child: Transform.scale(
+                  scale: _scale,
                   child: Container(
                     padding: const EdgeInsets.all(40),
                     child: _buildMindMapTree(widget.mindMap),
@@ -75,7 +91,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 8,
-                      offset: Offset(0, 2),
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
@@ -118,18 +134,18 @@ class _MindMapScreenState extends State<MindMapScreen> {
                     BoxShadow(
                       color: Colors.black12,
                       blurRadius: 8,
-                      offset: Offset(0, 2),
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.account_tree, size: 16, color: Color(0xFF4A90E2)),
-                    SizedBox(width: 8),
+                    Icon(Icons.account_tree, size: 16, color: const Color(0xFF4A90E2)),
+                    const SizedBox(width: 8),
                     Text(
                       widget.fileName,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: Colors.black87,
@@ -148,9 +164,12 @@ class _MindMapScreenState extends State<MindMapScreen> {
   }
 
   Widget _buildGrid() {
-    return CustomPaint(
-      size: Size.infinite,
-      painter: _GridPainter(offset: _offset, scale: _scale),
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      child: CustomPaint(
+        painter: _GridPainter(offset: _offset, scale: _scale),
+      ),
     );
   }
 
@@ -163,7 +182,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onPressed,
-          child: Icon(icon, size: 20, color: Color(0xFF4A90E2)),
+          child: Icon(icon, size: 20, color: const Color(0xFF4A90E2)),
         ),
       ),
     );
@@ -191,12 +210,12 @@ class _MindMapScreenState extends State<MindMapScreen> {
   Widget _buildChildrenConnector(int level) {
     return Container(
       height: 2,
-      width: nodeChildrenWidth(level),
+      width: _nodeChildrenWidth(level),
       color: _getNodeColor(level).withOpacity(0.3),
     );
   }
 
-  double nodeChildrenWidth(int level) {
+  double _nodeChildrenWidth(int level) {
     switch (level) {
       case 0: return 300;
       case 1: return 200;
@@ -220,7 +239,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
             BoxShadow(
               color: color.withOpacity(0.2),
               blurRadius: 8,
-              offset: Offset(0, 4),
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -252,7 +271,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
                 ),
                 child: Text(
                   '${node.children.length}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 10,
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -300,11 +319,11 @@ class _MindMapScreenState extends State<MindMapScreen> {
 
   Color _getNodeColor(int level) {
     final colors = [
-      Color(0xFF4A90E2), // Blue - Root
-      Color(0xFF66BB6A), // Green - Level 1
-      Color(0xFFFF7043), // Orange - Level 2
-      Color(0xFFAB47BC), // Purple - Level 3
-      Color(0xFF26C6DA), // Cyan - Level 4
+      const Color(0xFF4A90E2), // Blue - Root
+      const Color(0xFF66BB6A), // Green - Level 1
+      const Color(0xFFFF7043), // Orange - Level 2
+      const Color(0xFFAB47BC), // Purple - Level 3
+      const Color(0xFF26C6DA), // Cyan - Level 4
     ];
     return colors[level.clamp(0, colors.length - 1)];
   }
@@ -316,8 +335,8 @@ class _MindMapScreenState extends State<MindMapScreen> {
         title: Row(
           children: [
             Icon(_getNodeIcon(node.level), color: _getNodeColor(node.level)),
-            SizedBox(width: 8),
-            Text('Node Details'),
+            const SizedBox(width: 8),
+            const Text('Node Details'),
           ],
         ),
         content: Column(
@@ -332,13 +351,13 @@ class _MindMapScreenState extends State<MindMapScreen> {
                 color: _getNodeColor(node.level),
               ),
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             if (node.children.isNotEmpty)
               Text(
                 'Child nodes: ${node.children.length}',
                 style: TextStyle(color: Colors.grey[600]),
               ),
-            SizedBox(height: 8),
+            const SizedBox(height: 8),
             Text(
               'Level: ${node.level}',
               style: TextStyle(color: Colors.grey[600]),
@@ -348,7 +367,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
+            child: const Text('Close'),
           ),
         ],
       ),
@@ -368,19 +387,31 @@ class _GridPainter extends CustomPainter {
       ..color = Colors.grey[300]!
       ..strokeWidth = 0.5;
 
-    final cellSize = 20.0 * scale;
+    final cellSize = 40.0 * scale; // Increased base size
+    
+    // Calculate from screen center for better alignment
+    final centerX = size.width / 2;
+    final centerY = size.height / 2;
+    
+    // Adjust for offset to keep grid centered relative to mind map
+    final startX = centerX - (centerX - offset.dx) % cellSize;
+    final startY = centerY - (centerY - offset.dy) % cellSize;
 
-    // Calculate visible area
-    final startX = -offset.dx % cellSize;
-    final startY = -offset.dy % cellSize;
-
-    // Draw vertical lines
+    // Draw vertical lines to the right
     for (double x = startX; x < size.width; x += cellSize) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
+    // Draw vertical lines to the left
+    for (double x = startX - cellSize; x >= 0; x -= cellSize) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
 
-    // Draw horizontal lines
+    // Draw horizontal lines downward
     for (double y = startY; y < size.height; y += cellSize) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+    // Draw horizontal lines upward
+    for (double y = startY - cellSize; y >= 0; y -= cellSize) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
   }

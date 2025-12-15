@@ -1778,14 +1778,34 @@ class _InteractiveMindMap extends StatefulWidget {
 }
 
 class _InteractiveMindMapState extends State<_InteractiveMindMap> {
-  double _scale = 1.0;
-  double _previousScale = 1.0;
+  double _scale = 0.8;  // Start slightly zoomed out
+  double _previousScale = 0.8;
   Offset _offset = Offset.zero;
   Offset _previousOffset = Offset.zero;
   final double _minScale = 0.3;
   final double _maxScale = 3.0;
+  bool _isInitialized = false; // Add initialization flag
 
-  @override
+@override
+  void initState() {
+    super.initState();
+    _centerMindMap(); // Call centering method on initialization
+  }
+
+  void _centerMindMap() {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (!_isInitialized && mounted) {
+      setState(() {
+        _scale = 0.8;
+        _previousScale = 0.8;
+        _offset = Offset.zero;
+        _previousOffset = Offset.zero;
+        _isInitialized = true;
+      });
+    }
+  });
+}
+
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -1813,8 +1833,8 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
                 child: SingleChildScrollView(
                   scrollDirection: Axis.vertical,
                   child: Container(
-                    width: MediaQuery.of(context).size.width * 2, // Extra width for large mind maps
-                    height: MediaQuery.of(context).size.height * 2, // Extra height for large mind maps
+                    width: MediaQuery.of(context).size.width * 1.5, // Extra width for large mind maps
+                    height: MediaQuery.of(context).size.height * 1.5, // Extra height for large mind maps
                     child: Stack(
                       children: [
                         // Background grid
@@ -1825,6 +1845,7 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
                           offset: _offset,
                           child: Transform.scale(
                             scale: _scale,
+                            alignment: Alignment.center,
                             child: Center(
                               child: Container(
                                 padding: const EdgeInsets.all(40),
@@ -1925,11 +1946,14 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
   }
 
   Widget _buildGrid() {
-    return CustomPaint(
-      size: Size(MediaQuery.of(context).size.width * 2, MediaQuery.of(context).size.height * 2),
-      painter: _GridPainter(offset: _offset, scale: _scale),
-    );
-  }
+  return CustomPaint(
+    size: Size(
+      MediaQuery.of(context).size.width * 1.5,  // Reduced from 2x to 1.5x
+      MediaQuery.of(context).size.height * 1.5, // Reduced from 2x to 1.5x
+    ),
+    painter: _GridPainter(offset: _offset, scale: _scale),
+  );
+}
 
   Widget _buildControlButton({required IconData icon, required VoidCallback onPressed}) {
     return Container(
