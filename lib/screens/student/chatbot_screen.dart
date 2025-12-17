@@ -74,7 +74,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
 
       print('💬 Sending chat with ${history.length} history messages');
 
-      // TRY ONLINE FIRST
+      // Check if we have document context for RAG fallback
+      final canUseRAG = widget.pdfContext != null && widget.pdfContext!.isNotEmpty;
+
+      // TRY ONLINE FIRST (with shorter timeout)
       setState(() => _currentMode = 'online');
       try {
         final response = await ServerAPIService.chat(
@@ -82,6 +85,11 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           context: widget.pdfContext ?? "",
           history: history,
           model: _selectedModel,
+        ).timeout(
+          Duration(seconds: 10), // 10 second timeout
+          onTimeout: () {
+            throw Exception('Request timed out');
+          },
         );
 
         setState(() {
@@ -96,43 +104,43 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       } catch (onlineError) {
         print('❌ Online chat failed: $onlineError');
         
-        // CHECK IF WE CAN FALLBACK TO OFFLINE RAG
-        final canUseRAG = widget.pdfContext != null && widget.pdfContext!.isNotEmpty;
-        
-        if (canUseRAG && onlineError.toString().contains('Failed host lookup') || 
-            onlineError.toString().contains('timed out') ||
-            onlineError.toString().contains('Server error')) {
-          
+        // ALWAYS TRY OFFLINE RAG IF WE HAVE A DOCUMENT
+        if (canUseRAG) {
           print('🔄 Falling back to Offline RAG...');
           setState(() {
             _currentMode = 'offline_rag';
             _isOfflineMode = true;
           });
           
-          final ragResponse = await OfflineRAGService.answerQuestion(
-            question: userMessage,
-            documentText: widget.pdfContext,
-            conversationHistory: history,
-          );
-          
-          if (ragResponse != null) {
-            // RAG succeeded
-            setState(() {
-              _messages.add(ChatMessage(
-                text: "📄 (Offline Mode) $ragResponse",
-                isUser: false,
-                isFromDocument: true,
-              ));
-              _isLoading = false;
-            });
-          } else {
-            // RAG also failed
-            _addErrorMessage("I'm offline and couldn't find relevant information in your document. Please try rephrasing or check your connection.");
+          try {
+            final ragResponse = await OfflineRAGService.answerQuestion(
+              question: userMessage,
+              documentText: widget.pdfContext,
+              conversationHistory: history,
+            );
+            
+            if (ragResponse != null && ragResponse.isNotEmpty) {
+              // RAG succeeded
+              setState(() {
+                _messages.add(ChatMessage(
+                  text: "📄 (Offline Mode) $ragResponse",
+                  isUser: false,
+                  isFromDocument: true,
+                ));
+                _isLoading = false;
+              });
+            } else {
+              // RAG returned nothing useful
+              _addErrorMessage("I couldn't find relevant information in your document to answer that question. Try asking something related to the document content.");
+            }
+          } catch (ragError) {
+            print('❌ RAG also failed: $ragError');
+            _addErrorMessage("I'm having trouble processing your question. Please try rephrasing it or check if it's related to the document.");
           }
           
         } else {
-          // Can't use RAG or not a network error
-          _addErrorMessage(_getUserFriendlyError(onlineError.toString()));
+          // No document available for RAG fallback
+          _addErrorMessage(_getUserFriendlyError(onlineError.toString()) + "\n\n💡 Tip: This chat works best with a PDF document loaded.");
         }
       }
 
