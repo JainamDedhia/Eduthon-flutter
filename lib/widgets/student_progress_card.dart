@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/models.dart';
 import 'dart:math';
+import '../theme/app_theme.dart';
 
 class StudentProgressCard extends StatefulWidget {
   final String classCode;
@@ -107,7 +108,7 @@ class _StudentProgressCardState extends State<StudentProgressCard>
                 children: [
                   Icon(
                     Icons.analytics_outlined,
-                    color: const Color(0xFF4A90E2),
+                    color: const AppTheme.primaryBlue,
                     size: 24,
                   ),
                   const SizedBox(width: 12),
@@ -116,7 +117,7 @@ class _StudentProgressCardState extends State<StudentProgressCard>
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF4A90E2),
+                      color: AppTheme.primaryBlue,
                     ),
                   ),
                   const Spacer(),
@@ -125,7 +126,7 @@ class _StudentProgressCardState extends State<StudentProgressCard>
                     turns: _isExpanded ? 0.5 : 0,
                     child: Icon(
                       Icons.keyboard_arrow_down,
-                      color: const Color(0xFF4A90E2),
+                      color: const AppTheme.primaryBlue,
                     ),
                   ),
                 ],
@@ -553,7 +554,7 @@ class _StudentProgressCardState extends State<StudentProgressCard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4A90E2).withOpacity(0.1),
+                  color: const AppTheme.primaryBlue.withOpacity(0.1),
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(7),
                   ),

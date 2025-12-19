@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/firebase_config.dart';
 import '../../providers/auth_provider.dart';
+import '../../theme/app_theme.dart';
 
 class CreateClassScreen extends StatefulWidget {
   const CreateClassScreen({super.key});
@@ -142,7 +143,7 @@ class _CreateClassScreenState extends State<CreateClassScreen> {
               ElevatedButton(
                 onPressed: _loading ? null : _handleCreateClass,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A90E2),
+                  backgroundColor: AppTheme.primaryBlue,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

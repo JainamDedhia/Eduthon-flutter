@@ -5,9 +5,23 @@ import 'package:archive/archive_io.dart';
 import 'package:open_file/open_file.dart';
 import '../models/models.dart';
 import 'offline_db.dart';
+import '../config/aws_config.dart';
+import 'aws_s3_service.dart';
 
 class DownloadManager {
-  static final Dio _dio = Dio();
+  static final Dio _dio = Dio(
+    BaseOptions(
+      headers: {
+        'User-Agent': 'GYAANSETU-Mobile/1.0',
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate',
+      },
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 60),
+      followRedirects: true,
+      validateStatus: (status) => status != null && status < 500,
+    ),
+  );
 
   // Download and store file with compression
   static Future<String> downloadAndStore(
@@ -57,20 +71,76 @@ class DownloadManager {
         throw Exception('Invalid file URL');
       }
 
-      print('🌐 [downloadManager] Step 2: Downloading from: ${material.url}');
-
-      // Download file
-      print('⏳ [downloadManager] Download in progress...');
-      await _dio.download(
-        material.url,
-        tempPath,
-        onReceiveProgress: (received, total) {
-          if (total != -1) {
-            final progress = (received / total * 100).toStringAsFixed(0);
-            print('📥 Download progress: $progress%');
+      // Optionally generate signed URL if it's from our S3 bucket
+      String downloadUrl = material.url;
+      if (_isS3Url(material.url)) {
+        try {
+          final objectKey = _extractS3ObjectKey(material.url);
+          if (objectKey != null) {
+            // Generate presigned URL for secure access
+            downloadUrl = AwsS3Service.generatePresignedUrl(objectKey);
+            print('🔐 [downloadManager] Using presigned URL for S3 object');
           }
-        },
-      );
+        } catch (e) {
+          print('⚠️ [downloadManager] Failed to generate presigned URL, using original: $e');
+          // Fallback to original URL
+        }
+      }
+
+      print('🌐 [downloadManager] Step 2: Downloading from: $downloadUrl');
+
+      // Download file with proper error handling
+      print('⏳ [downloadManager] Download in progress...');
+      try {
+        await _dio.download(
+          downloadUrl,
+          tempPath,
+          options: Options(
+            headers: {
+              'User-Agent': 'GYAANSETU-Mobile/1.0',
+              'Accept': '*/*',
+            },
+            followRedirects: true,
+            validateStatus: (status) => status != null && status < 500,
+          ),
+          onReceiveProgress: (received, total) {
+            if (total != -1) {
+              final progress = (received / total * 100).toStringAsFixed(0);
+              print('📥 Download progress: $progress%');
+            }
+          },
+        );
+      } on DioException catch (dioError) {
+        print('❌ [downloadManager] DioException: ${dioError.type}');
+        print('   Status Code: ${dioError.response?.statusCode}');
+        print('   Message: ${dioError.message}');
+        
+        // Handle specific error types
+        if (dioError.response?.statusCode == 403) {
+          throw Exception(
+            'Access denied (403). The file may be private or the URL has expired. '
+            'Please contact your teacher to get a new download link.'
+          );
+        } else if (dioError.response?.statusCode == 404) {
+          throw Exception(
+            'File not found (404). The file may have been moved or deleted. '
+            'Please contact your teacher.'
+          );
+        } else if (dioError.type == DioExceptionType.connectionTimeout) {
+          throw Exception(
+            'Connection timeout. Please check your internet connection and try again.'
+          );
+        } else if (dioError.type == DioExceptionType.receiveTimeout) {
+          throw Exception(
+            'Download timeout. The file may be too large. Please try again.'
+          );
+        } else {
+          throw Exception(
+            'Download failed: ${dioError.message ?? dioError.toString()}. '
+            'Status code: ${dioError.response?.statusCode ?? "unknown"}'
+          );
+        }
+      }
 
       print('✅ [downloadManager] Download successful: $tempPath');
 
@@ -159,11 +229,21 @@ class DownloadManager {
       // Provide user-friendly error messages
       if (e.toString().contains('already downloaded')) {
         rethrow;
+      } else if (e.toString().contains('Access denied') || 
+                 e.toString().contains('403')) {
+        rethrow; // Already has user-friendly message
+      } else if (e.toString().contains('File not found') || 
+                 e.toString().contains('404')) {
+        rethrow; // Already has user-friendly message
       } else if (e.toString().contains('Network') ||
-          e.toString().contains('Connection')) {
-        throw Exception('Network error. Please check your internet connection.');
+          e.toString().contains('Connection') ||
+          e.toString().contains('timeout')) {
+        throw Exception('Network error. Please check your internet connection and try again.');
+      } else if (e is DioException) {
+        // DioException already handled above
+        rethrow;
       } else {
-        throw Exception('Download failed: $e');
+        throw Exception('Download failed: ${e.toString()}');
       }
     }
   }
@@ -306,6 +386,31 @@ class DownloadManager {
     } catch (e) {
       print('❌ [downloadManager] Failed to get file size: $e');
       return 0;
+    }
+  }
+
+  /// Check if URL is from the configured S3 bucket
+  static bool _isS3Url(String url) {
+    final baseUrl = AwsConfig.getBaseUrl();
+    return url.startsWith(baseUrl) || url.contains(AwsConfig.bucketName);
+  }
+
+  /// Extract S3 object key from URL
+  static String? _extractS3ObjectKey(String url) {
+    try {
+      final baseUrl = AwsConfig.getBaseUrl();
+      if (url.startsWith(baseUrl)) {
+        return url.substring(baseUrl.length).split('?').first;
+      }
+      // Try to extract from full S3 URL pattern
+      final uri = Uri.parse(url);
+      if (uri.host.contains(AwsConfig.bucketName)) {
+        return uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
+      }
+      return null;
+    } catch (e) {
+      print('⚠️ [downloadManager] Error extracting S3 object key: $e');
+      return null;
     }
   }
 }

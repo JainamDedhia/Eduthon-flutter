@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:dio/dio.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/firebase_config.dart';
+import '../../theme/app_theme.dart';
 
 class UploadMaterialScreen extends StatefulWidget {
   const UploadMaterialScreen({super.key});
@@ -149,7 +150,7 @@ class _UploadMaterialScreenState extends State<UploadMaterialScreen> {
                   icon: const Icon(Icons.upload_file),
                   label: const Text('Select & Upload File'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A90E2),
+                    backgroundColor: AppTheme.primaryBlue,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 24, vertical: 14),
                     shape: RoundedRectangleBorder(

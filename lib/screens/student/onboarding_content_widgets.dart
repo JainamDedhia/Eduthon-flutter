@@ -1,5 +1,6 @@
 // FILE: lib/screens/student/onboarding_content_widgets.dart
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
 class OnboardingContentWidgets {
   static Widget buildOnboardingContent({
@@ -29,10 +30,10 @@ class OnboardingContentWidgets {
           Container(
             padding: EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Color(0xFF4A90E2).withOpacity(0.1),
+              color: AppTheme.primaryBlue.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 36, color: Color(0xFF4A90E2)),
+            child: Icon(icon, size: 36, color: AppTheme.primaryBlue),
           ),
           SizedBox(height: 12),
           Text(
@@ -68,7 +69,7 @@ class OnboardingContentWidgets {
               ElevatedButton(
                 onPressed: onNext,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF4A90E2),
+                  backgroundColor: AppTheme.primaryBlue,
                   padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -117,10 +118,10 @@ class OnboardingContentWidgets {
           Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Color(0xFF4A90E2).withOpacity(0.1),
+              color: AppTheme.primaryBlue.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 48, color: Color(0xFF4A90E2)),
+            child: Icon(icon, size: 48, color: AppTheme.primaryBlue),
           ),
           SizedBox(height: 16),
           Text(
@@ -156,7 +157,7 @@ class OnboardingContentWidgets {
               ElevatedButton(
                 onPressed: onNext,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF4A90E2),
+                  backgroundColor: AppTheme.primaryBlue,
                   padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),

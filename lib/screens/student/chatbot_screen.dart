@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import '../../services/server_api_service.dart';
 import '../../services/offline_rag_service.dart';
+import '../../theme/app_theme.dart';
 
 class ChatbotScreen extends StatefulWidget {
   final String? pdfContext;
@@ -222,7 +223,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color(0xFFF5F5F5),
+      backgroundColor: AppTheme.lightGrey,
       appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -239,7 +240,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               ),
           ],
         ),
-        backgroundColor: Color(0xFF4A90E2),
+        backgroundColor: AppTheme.primaryBlue,
         actions: [
           if (_messages.length > 1)
             IconButton(
@@ -388,7 +389,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
                       valueColor: AlwaysStoppedAnimation(
-                        _isOfflineMode ? Colors.blue : Color(0xFF4A90E2),
+                        _isOfflineMode ? Colors.blue : AppTheme.primaryBlue,
                       ),
                     ),
                   ),
@@ -450,7 +451,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                       gradient: LinearGradient(
                         colors: _isOfflineMode
                             ? [Colors.blue[400]!, Colors.blue[600]!]
-                            : [Color(0xFF4A90E2), Color(0xFF357ABD)],
+                            : [AppTheme.primaryBlue, AppTheme.secondaryBlue],
                       ),
                       shape: BoxShape.circle,
                     ),
@@ -486,7 +487,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                     ? Colors.red
                     : message.isFromDocument
                       ? Colors.blue
-                      : Color(0xFF4A90E2),
+                      : AppTheme.primaryBlue,
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -506,7 +507,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: message.isUser
-                    ? Color(0xFF4A90E2)
+                    ? AppTheme.primaryBlue
                     : message.isError
                         ? Colors.red[50]
                         : message.isFromDocument
@@ -557,6 +558,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                       fontSize: 15,
                       height: 1.4,
                     ),
+                    maxLines: null,
+                    softWrap: true,
                   ),
                 ],
               ),
@@ -567,7 +570,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             Container(
               padding: EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Color(0xFF66BB6A),
+                color: AppTheme.successGreen,
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.person, color: Colors.white, size: 20),

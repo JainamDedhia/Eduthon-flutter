@@ -5,6 +5,8 @@ import '../../services/mind_map_generator.dart';
 import '../../models/models.dart';
 import '../../services/llm_summary_service.dart';
 import '../../services/offline_db.dart';
+import '../../services/explanation_parser.dart';
+import '../../theme/app_theme.dart';
 
 class SummaryQuizOfflineService {
   static Future<void> generateOfflineMode({
@@ -25,7 +27,7 @@ class SummaryQuizOfflineService {
         builder: (context) => AlertDialog(
           title: const Row(
             children: [
-              Icon(Icons.language, color: Color(0xFF4A90E2)),
+              Icon(Icons.language, color: AppTheme.primaryBlue),
               SizedBox(width: 8),
               Text('Select Language'),
             ],
@@ -93,6 +95,28 @@ class SummaryQuizOfflineService {
         quiz = await SummaryGenerator.generateQuiz(summary);
       }
 
+      // Parse explanations for quiz questions
+      setProgress(0.75);
+      print('🔍 [SummaryQuiz] Parsing explanations from source text...');
+      
+      try {
+        // Use the original PDF text for better explanation extraction
+        final explanations = ExplanationParser.parseExplanationsForQuiz(quiz, text);
+        
+        // Add explanations to quiz questions
+        for (int i = 0; i < quiz.length; i++) {
+          if (explanations.containsKey(i) && explanations[i] != null) {
+            quiz[i]['explanation'] = explanations[i];
+            print('✅ [SummaryQuiz] Explanation found for question ${i + 1}');
+          } else {
+            print('⚠️ [SummaryQuiz] No explanation found for question ${i + 1}');
+          }
+        }
+      } catch (e) {
+        print('⚠️ [SummaryQuiz] Error parsing explanations: $e');
+        // Continue without explanations if parsing fails
+      }
+
       setProgress(0.85);
       print('🧠 Generating mind map...');
       
@@ -155,7 +179,7 @@ class SummaryQuizOfflineService {
         decoration: BoxDecoration(
           color: const Color(0xFFE3F2FD),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF4A90E2)),
+          border: Border.all(color: AppTheme.primaryBlue),
         ),
         child: Row(
           children: [

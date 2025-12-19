@@ -5,8 +5,10 @@ import '../../services/mind_map_generator.dart';
 import '../../models/models.dart';
 import '../../services/server_api_service.dart';
 import '../../services/offline_db.dart';
+import '../../services/explanation_parser.dart';
 import '../../widgets/model_selection_dialog.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import '../../theme/app_theme.dart';
 
 class SummaryQuizOnlineService {
   static Future<void> generateWithServerAPI({
@@ -72,6 +74,28 @@ class SummaryQuizOnlineService {
       );
 
       print('✅ [SummaryQuiz] Quiz received: ${quiz.length} questions');
+
+      // Step 3.5: Parse explanations for quiz questions
+      setProgress(0.7);
+      print('🔍 [SummaryQuiz] Parsing explanations from source text...');
+      
+      try {
+        // Use the original PDF text for better explanation extraction
+        final explanations = ExplanationParser.parseExplanationsForQuiz(quiz, text);
+        
+        // Add explanations to quiz questions
+        for (int i = 0; i < quiz.length; i++) {
+          if (explanations.containsKey(i) && explanations[i] != null) {
+            quiz[i]['explanation'] = explanations[i];
+            print('✅ [SummaryQuiz] Explanation found for question ${i + 1}');
+          } else {
+            print('⚠️ [SummaryQuiz] No explanation found for question ${i + 1}');
+          }
+        }
+      } catch (e) {
+        print('⚠️ [SummaryQuiz] Error parsing explanations: $e');
+        // Continue without explanations if parsing fails
+      }
 
       // Step 4: Generate Mind Map (use local generation)
       setProgress(0.85);
@@ -164,7 +188,7 @@ class SummaryQuizOnlineService {
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF4A90E2),
+                  backgroundColor: AppTheme.primaryBlue,
                 ),
                 child: Text('Use Offline Mode'),
               ),

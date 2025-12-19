@@ -292,6 +292,16 @@ class StudentProgressModel {
   }
 }
 
+// Quiz Question Structure
+// Quiz questions are stored as Map<String, dynamic> with the following structure:
+// {
+//   'question': String,           // The question text
+//   'answer_label': String,        // The label of correct answer (e.g., 'A', 'B', 'C', 'D')
+//   'answer_text': String,        // The text of correct answer
+//   'options': List<Map>,          // List of options, each with 'label' and 'text'
+//   'explanation': String?,        // Optional: Explanation parsed from source text (regex-based)
+// }
+
 // Class Analytics Model
 class ClassAnalytics {
   final int totalStudents;

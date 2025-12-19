@@ -1,6 +1,7 @@
 // FILE: lib/screens/student/mind_map_screen.dart
 import 'package:flutter/material.dart';
 import 'package:claudetest/services/mind_map_generator.dart';
+import '../../theme/app_theme.dart';
 
 class MindMapScreen extends StatefulWidget {
   final MindMapNode mindMap;
@@ -141,7 +142,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.account_tree, size: 16, color: const Color(0xFF4A90E2)),
+                    Icon(Icons.account_tree, size: 16, color: const AppTheme.primaryBlue),
                     const SizedBox(width: 8),
                     Text(
                       widget.fileName,
@@ -182,7 +183,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onPressed,
-          child: Icon(icon, size: 20, color: const Color(0xFF4A90E2)),
+          child: Icon(icon, size: 20, color: const AppTheme.primaryBlue),
         ),
       ),
     );
@@ -319,7 +320,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
 
   Color _getNodeColor(int level) {
     final colors = [
-      const Color(0xFF4A90E2), // Blue - Root
+      const AppTheme.primaryBlue, // Blue - Root
       const Color(0xFF66BB6A), // Green - Level 1
       const Color(0xFFFF7043), // Orange - Level 2
       const Color(0xFFAB47BC), // Purple - Level 3

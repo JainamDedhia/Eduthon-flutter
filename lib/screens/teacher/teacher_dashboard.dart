@@ -4,8 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/firebase_config.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/common/rounded_card.dart';
+import '../../widgets/common/empty_state.dart';
+import '../../widgets/common/loading_indicator.dart';
 import '../../widgets/student_progress_widget.dart';
-import '../../widgets/student_progress_card.dart';
+import '../common/notifications_screen.dart';
+import '../common/profile_screen.dart';
 
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({super.key});
@@ -17,7 +22,8 @@ class TeacherDashboard extends StatefulWidget {
 class _TeacherDashboardState extends State<TeacherDashboard> {
   List<ClassModel> _classes = [];
   bool _loading = true;
-  String? _expandedClassId; // Track which class card is expanded
+  String? _expandedClassId;
+  int _currentTab = 0; // 0: Dashboard, 1: Notifications, 2: Profile
 
   @override
   void initState() {
@@ -39,86 +45,198 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
         .where('teacherId', isEqualTo: userId)
         .snapshots()
         .listen((snapshot) {
-      setState(() {
-        _classes = snapshot.docs
-            .map((doc) => ClassModel.fromFirestore(doc.data(), doc.id))
-            .toList();
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _classes = snapshot.docs
+              .map((doc) => ClassModel.fromFirestore(doc.data(), doc.id))
+              .toList();
+          _loading = false;
+        });
+      }
     });
-  }
-
-  Future<void> _handleLogout() async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              final authProvider =
-                  Provider.of<AuthProvider>(context, listen: false);
-              await authProvider.logout();
-              if (mounted) {
-                Navigator.pushNamedAndRemoveUntil(
-                    context, '/home', (route) => false);
-              }
-            },
-            child: const Text('Logout'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
 
+    if (authProvider.user == null || authProvider.userRole != 'teacher') {
+      return const Scaffold(
+        body: LoadingIndicator(),
+      );
+    }
+
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(20),
-              color: Colors.white,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      backgroundColor: AppTheme.lightGrey,
+      body: _buildBody(),
+      bottomNavigationBar: _buildBottomNav(),
+      floatingActionButton: _currentTab == 0
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.pushNamed(context, '/teacher/create-class'),
+              icon: const Icon(Icons.add, size: 28),
+              label: const Text(
+                'Create Class',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: AppTheme.primaryBlue,
+            )
+          : null,
+    );
+  }
+
+  Widget _buildBody() {
+    switch (_currentTab) {
+      case 0:
+        return _buildDashboardTab();
+      case 1:
+        return const NotificationsScreen();
+      case 2:
+        return const ProfileScreen();
+      default:
+        return _buildDashboardTab();
+    }
+  }
+
+  // 🏠 TAB 1: DASHBOARD
+  Widget _buildDashboardTab() {
+    final totalStudents = _classes.fold(0, (sum, c) => sum + c.students.length);
+    final totalMaterials = _classes.fold(0, (sum, c) => sum + c.materials.length);
+
+    return SafeArea(
+      child: CustomScrollView(
+        slivers: [
+          // Header
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.all(AppTheme.spacingL),
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+              ),
+              child: Column(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
                     children: [
-                      const Text(
-                        'Welcome, Teacher!',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                      const Icon(Icons.school_rounded, color: AppTheme.white, size: 32),
+                      const SizedBox(width: AppTheme.spacingM),
+                      const Expanded(
+                        child: Text(
+                          'Teacher Dashboard',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.white,
+                            fontFamily: 'Roboto',
+                          ),
                         ),
                       ),
-                      Text(
-                        authProvider.user?.email ?? '',
-                        style: const TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
                     ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.logout, color: Colors.red),
-                    onPressed: _handleLogout,
                   ),
                 ],
               ),
             ),
+          ),
 
-            // Classes Section
-            Padding(
-              padding: const EdgeInsets.all(20),
+          // Quick Stats
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingM),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: RoundedCard(
+                      padding: const EdgeInsets.all(AppTheme.spacingM),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.class_, color: AppTheme.primaryBlue, size: 32),
+                          const SizedBox(height: AppTheme.spacingS),
+                          Text(
+                            '${_classes.length}',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                          const Text(
+                            'Classes',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppTheme.spacingM),
+                  Expanded(
+                    child: RoundedCard(
+                      padding: const EdgeInsets.all(AppTheme.spacingM),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.people, color: AppTheme.successGreen, size: 32),
+                          const SizedBox(height: AppTheme.spacingS),
+                          Text(
+                            '$totalStudents',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                          const Text(
+                            'Students',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppTheme.spacingM),
+                  Expanded(
+                    child: RoundedCard(
+                      padding: const EdgeInsets.all(AppTheme.spacingM),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.insert_drive_file, color: Colors.orange, size: 32),
+                          const SizedBox(height: AppTheme.spacingS),
+                          Text(
+                            '$totalMaterials',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                          const Text(
+                            'Materials',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Classes Section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingM),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -127,171 +245,267 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                      fontFamily: 'Roboto',
                     ),
                   ),
-                  Text(
-                    '${_classes.length} classes',
-                    style: const TextStyle(color: Colors.grey),
-                  ),
+                  if (_classes.isNotEmpty)
+                    Text(
+                      '${_classes.length}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: AppTheme.textSecondary,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
                 ],
               ),
             ),
+          ),
 
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _classes.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No classes yet. Create your first class!',
-                            style: TextStyle(fontSize: 16, color: Colors.grey),
+          // Classes List
+          _loading
+              ? const SliverFillRemaining(
+                  child: LoadingIndicator(),
+                )
+              : _classes.isEmpty
+                  ? SliverFillRemaining(
+                      child: EmptyState(
+                        icon: Icons.class_,
+                        title: 'No Classes Yet',
+                        message: 'Create your first class to get started!',
+                        actionLabel: 'Create Class',
+                        onAction: () => Navigator.pushNamed(context, '/teacher/create-class'),
+                      ),
+                    )
+                  : SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppTheme.spacingM,
+                            vertical: AppTheme.spacingS,
                           ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          itemCount: _classes.length,
-                          itemBuilder: (context, index) =>
-                              _buildClassCard(_classes[index]),
+                          child: _buildClassCard(_classes[index]),
                         ),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.pushNamed(context, '/teacher/create-class'),
-        icon: const Icon(Icons.add),
-        label: const Text('Create New Class'),
-        backgroundColor: const Color(0xFF4A90E2),
-      ),
-    );
-  }
-
-  Widget _buildProgressSection(ClassModel classModel) {
-    final isExpanded = _expandedClassId == classModel.id;
-    
-    return Column(
-      children: [
-        InkWell(
-          onTap: () {
-            setState(() {
-              _expandedClassId = isExpanded ? null : classModel.id;
-            });
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-            decoration: BoxDecoration(
-              color: isExpanded 
-                  ? const Color(0xFF4A90E2).withOpacity(0.1)
-                  : Colors.grey[100],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.analytics,
-                      color: const Color(0xFF4A90E2),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Student Progress Report',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isExpanded 
-                            ? const Color(0xFF4A90E2)
-                            : Colors.grey[800],
+                        childCount: _classes.length,
                       ),
                     ),
-                  ],
-                ),
-                Icon(
-                  isExpanded 
-                      ? Icons.expand_less 
-                      : Icons.expand_more,
-                  color: const Color(0xFF4A90E2),
-                ),
-              ],
-            ),
-          ),
-        ),
-        
-        // Progress Widget (shown when expanded)
-        if (isExpanded) ...[
-          const SizedBox(height: 16),
-          StudentProgressWidget(classCode: classModel.classCode),
         ],
-      ],
+      ),
     );
   }
 
   Widget _buildClassCard(ClassModel classModel) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFF4A90E2), width: 4),
+    return RoundedCard(
+      padding: const EdgeInsets.all(AppTheme.spacingM),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Class Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppTheme.spacingS),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusS),
+                ),
+                child: const Icon(Icons.class_, color: AppTheme.primaryBlue, size: 24),
+              ),
+              const SizedBox(width: AppTheme.spacingM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      classModel.className,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingXS),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacingS,
+                        vertical: AppTheme.spacingXS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusS),
+                      ),
+                      child: Text(
+                        'Code: ${classModel.classCode}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primaryBlue,
+                          fontFamily: 'Roboto',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          if (classModel.description.isNotEmpty) ...[
+            const SizedBox(height: AppTheme.spacingM),
+            Text(
+              classModel.description,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+                fontFamily: 'Roboto',
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+
+          const SizedBox(height: AppTheme.spacingM),
+          const Divider(),
+
+          // Stats Row
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatItem(
+                  Icons.people,
+                  '${classModel.students.length}',
+                  'Students',
+                  AppTheme.successGreen,
+                ),
+              ),
+              Expanded(
+                child: _buildStatItem(
+                  Icons.insert_drive_file,
+                  '${classModel.materials.length}',
+                  'Materials',
+                  AppTheme.primaryBlue,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: AppTheme.spacingM),
+
+          // Action Buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.pushNamed(
+                    context,
+                    '/teacher/upload-material',
+                    arguments: classModel.classCode,
+                  ),
+                  icon: const Icon(Icons.upload),
+                  label: const Text('Upload Material'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.primaryBlue,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppTheme.spacingM),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _expandedClassId = _expandedClassId == classModel.id
+                          ? null
+                          : classModel.id;
+                    });
+                  },
+                  icon: Icon(
+                    _expandedClassId == classModel.id
+                        ? Icons.expand_less
+                        : Icons.expand_more,
+                  ),
+                  label: const Text('Analytics'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryBlue,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Student Progress (Expanded)
+          if (_expandedClassId == classModel.id) ...[
+            const SizedBox(height: AppTheme.spacingM),
+            const Divider(),
+            const SizedBox(height: AppTheme.spacingM),
+            StudentProgressWidget(classCode: classModel.classCode),
+          ],
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    );
+  }
+
+  Widget _buildStatItem(IconData icon, String value, String label, Color color) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: AppTheme.spacingXS),
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              classModel.className,
-              style: const TextStyle(
-                fontSize: 18,
+              value,
+              style: TextStyle(
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
+                color: color,
+                fontFamily: 'Roboto',
               ),
             ),
-            if (classModel.description.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                classModel.description,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.textSecondary,
+                fontFamily: 'Roboto',
               ),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Code: ${classModel.classCode}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF4A90E2),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  '${classModel.students.length} students',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
             ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () => Navigator.pushNamed(
-                context,
-                '/teacher/upload-material',
-                arguments: classModel.classCode,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4A90E2),
-              ),
-              child: const Text('Upload Material'),
-            ),
-            
-            // Divider before progress section
-            const Divider(height: 24),
-            
-            // Expandable Student Progress Section
-            _buildProgressSection(classModel),
           ],
         ),
+      ],
+    );
+  }
+
+  // Bottom Navigation
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: AppTheme.softShadow,
+      ),
+      child: BottomNavigationBar(
+        currentIndex: _currentTab,
+        onTap: (index) => setState(() => _currentTab = index),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: AppTheme.primaryBlue,
+        unselectedItemColor: AppTheme.secondaryTextGrey,
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_rounded, size: 28),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.notifications_outlined, size: 28),
+            label: 'Notifications',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline, size: 28),
+            label: 'Profile',
+          ),
+        ],
       ),
     );
   }

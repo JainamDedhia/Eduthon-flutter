@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/models.dart';
+import '../theme/app_theme.dart';
 
 class StudentProgressWidget extends StatefulWidget {
   final String classCode;
@@ -127,7 +128,7 @@ class _StudentProgressWidgetState extends State<StudentProgressWidget> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF4A90E2) : Colors.transparent,
+            color: isSelected ? AppTheme.primaryBlue : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -578,7 +579,7 @@ class _StudentProgressWidgetState extends State<StudentProgressWidget> {
                   barRods: [
                     BarChartRodData(
                       toY: student.quizAttempts.toDouble(),
-                      color: const Color(0xFF4A90E2),
+                      color: AppTheme.primaryBlue,
                       width: 30,
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(6),
@@ -679,7 +680,7 @@ class _StudentProgressWidgetState extends State<StudentProgressWidget> {
             'Total Attempts',
             totalAttempts.toString(),
             Icons.quiz,
-            const Color(0xFF4A90E2),
+            AppTheme.primaryBlue,
           ),
           _buildSummaryItem(
             'Average',

@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/server_api_service.dart';
+import '../theme/app_theme.dart';
 
 class ModelSelectionDialog extends StatefulWidget {
   final String title;
@@ -69,7 +70,7 @@ class _ModelSelectionDialogState extends State<ModelSelectionDialog> {
               padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
+                  colors: [AppTheme.primaryBlue, AppTheme.secondaryBlue],
                 ),
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(20),
@@ -157,7 +158,7 @@ class _ModelSelectionDialogState extends State<ModelSelectionDialog> {
                             ? null
                             : () => Navigator.pop(context, _selectedModel),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF4A90E2),
+                          backgroundColor: AppTheme.primaryBlue,
                           padding: EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -192,7 +193,7 @@ class _ModelSelectionDialogState extends State<ModelSelectionDialog> {
             height: 50,
             child: CircularProgressIndicator(
               strokeWidth: 4,
-              valueColor: AlwaysStoppedAnimation(Color(0xFF4A90E2)),
+              valueColor: AlwaysStoppedAnimation(AppTheme.primaryBlue),
             ),
           ),
           SizedBox(height: 20),
@@ -296,7 +297,7 @@ class _ModelSelectionDialogState extends State<ModelSelectionDialog> {
           name: 'Balanced',
           speed: '4-6 seconds',
           quality: '⭐⭐⭐⭐',
-          color: Color(0xFF4A90E2),
+          color: AppTheme.primaryBlue,
           recommended: true,
         ),
         SizedBox(height: 12),

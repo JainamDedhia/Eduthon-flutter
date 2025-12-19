@@ -7,9 +7,15 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/offline_db.dart';
 import '../../services/download_manager.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/common/rounded_card.dart';
+import '../../widgets/common/offline_indicator.dart';
+import '../../widgets/common/empty_state.dart';
+import '../../widgets/common/loading_indicator.dart';
+import '../../widgets/common/primary_button.dart';
 import 'package:claudetest/services/quiz_sync_service.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
-import '../../services/onboarding_service.dart';
+import '../common/notifications_screen.dart';
+import '../common/profile_screen.dart';
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -22,18 +28,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
   List<ClassModel> _classes = [];
   bool _loading = true;
   bool _isOnline = true;
-  bool _networkChecked = false;
   StorageStats _storageStats = StorageStats.empty();
-  int _currentTab = 0; // Bottom nav index
-
-  // GlobalKeys for onboarding targets
-  final GlobalKey _joinClassKey = GlobalKey();
-  final GlobalKey _firstClassCardKey = GlobalKey(); // Only for first class card
-  final GlobalKey _firstDownloadButtonKey = GlobalKey(); // Only for first download button
-  final GlobalKey _aiToolsTabKey = GlobalKey();
-  final GlobalKey _settingsTabKey = GlobalKey();
-  
-  TutorialCoachMark? _tutorialCoachMark;
+  int _currentTab = 0; // 0: Dashboard, 1: Notifications, 2: Profile
 
   @override
   void initState() {
@@ -42,257 +38,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
     _loadStorageStats();
     _listenToClasses();
     _syncQuizResults();
-    
-    // Initialize onboarding after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndShowOnboarding();
-    });
-  }
-
-  Future<void> _checkAndShowOnboarding() async {
-    final completed = await OnboardingService.isStudentDashboardCompleted();
-    if (!completed && mounted) {
-      // Wait a bit for UI to settle and data to load
-      await Future.delayed(Duration(milliseconds: 1500));
-      if (mounted && !_loading && _classes.isNotEmpty) {
-        // Wait a bit more for the class cards to render properly
-        await Future.delayed(Duration(milliseconds: 500));
-        if (mounted) {
-          _showOnboarding();
-        }
-      }
-    }
-  }
-
-  void _showOnboarding() {
-    final targets = <TargetFocus>[];
-    
-    // Target 1: Classes Tab (current screen) - Only target first class card
-    targets.add(
-      TargetFocus(
-        identify: "classes_tab",
-        keyTarget: _firstClassCardKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.bottom,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.class_,
-                title: '📚 Your Classes',
-                description: 'See all classes you joined here.\nTap any class to view materials.',
-                onNext: () => controller.next(),
-                onSkip: () => _skipOnboarding(controller),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    // Target 2: Download Button - Only target first download button
-    targets.add(
-      TargetFocus(
-        identify: "download_button",
-        keyTarget: _firstDownloadButtonKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.download,
-                title: '⬇️ Download Files',
-                description: 'Download PDFs to study offline.\nFiles work without internet!',
-                onNext: () => controller.next(),
-                onSkip: () => _skipOnboarding(controller),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    // Target 3: AI Tools Tab
-    targets.add(
-      TargetFocus(
-        identify: "ai_tools",
-        keyTarget: _aiToolsTabKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.auto_awesome,
-                title: '🤖 AI Tools',
-                description: 'Generate summaries & quizzes from PDFs.\nTap here to access AI features!',
-                onNext: () => controller.next(),
-                onSkip: () => _skipOnboarding(controller),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    // Target 4: Settings Tab
-    targets.add(
-      TargetFocus(
-        identify: "settings",
-        keyTarget: _settingsTabKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.settings,
-                title: '⚙️ Settings',
-                description: 'View your profile & logout here.\nCheck storage savings!',
-                onNext: () => _finishOnboarding(controller),
-                onSkip: () => _skipOnboarding(controller),
-                isLast: true,
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    _tutorialCoachMark = TutorialCoachMark(
-      targets: targets,
-      colorShadow: Colors.black,
-      paddingFocus: 10,
-      opacityShadow: 0.8,
-      onFinish: () {
-        OnboardingService.markStudentDashboardCompleted();
-      },
-      onSkip: () {
-        OnboardingService.markStudentDashboardCompleted();
-        return true;
-      },
-    );
-    
-    _tutorialCoachMark?.show(context: context);
-  }
-
-  Widget _buildOnboardingContent({
-    required IconData icon,
-    required String title,
-    required String description,
-    required VoidCallback onNext,
-    required VoidCallback onSkip,
-    bool isLast = false,
-  }) {
-    return Container(
-      padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Icon
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Color(0xFF4A90E2).withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, size: 48, color: Color(0xFF4A90E2)),
-          ),
-          
-          SizedBox(height: 16),
-          
-          // Title
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          
-          SizedBox(height: 12),
-          
-          // Description
-          Text(
-            description,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.black54,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          
-          SizedBox(height: 24),
-          
-          // Buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Skip button
-              TextButton(
-                onPressed: onSkip,
-                child: Text(
-                  'Skip Tour',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ),
-              
-              // Next/Finish button
-              ElevatedButton(
-                onPressed: onNext,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF4A90E2),
-                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: Text(
-                  isLast ? '✓ Got it!' : 'Next →',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _skipOnboarding(TutorialCoachMarkController controller) {
-    controller.skip();
-    OnboardingService.markStudentDashboardCompleted();
-  }
-
-  void _finishOnboarding(TutorialCoachMarkController controller) {
-    controller.next();
-    OnboardingService.markStudentDashboardCompleted();
   }
 
   Future<void> _syncQuizResults() async {
@@ -307,19 +52,22 @@ class _StudentDashboardState extends State<StudentDashboard> {
     final connectivityResult = await Connectivity().checkConnectivity();
     setState(() {
       _isOnline = connectivityResult != ConnectivityResult.none;
-      _networkChecked = true;
     });
 
     Connectivity().onConnectivityChanged.listen((result) {
-      setState(() {
-        _isOnline = result != ConnectivityResult.none;
-      });
+      if (mounted) {
+        setState(() {
+          _isOnline = result != ConnectivityResult.none;
+        });
+      }
     });
   }
 
   Future<void> _loadStorageStats() async {
     final stats = await OfflineDB.getStorageStats();
-    setState(() => _storageStats = stats);
+    if (mounted) {
+      setState(() => _storageStats = stats);
+    }
   }
 
   void _listenToClasses() {
@@ -336,12 +84,14 @@ class _StudentDashboardState extends State<StudentDashboard> {
         .where('students', arrayContains: userId)
         .snapshots()
         .listen((snapshot) {
-      setState(() {
-        _classes = snapshot.docs
-            .map((doc) => ClassModel.fromFirestore(doc.data(), doc.id))
-            .toList();
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _classes = snapshot.docs
+              .map((doc) => ClassModel.fromFirestore(doc.data(), doc.id))
+              .toList();
+          _loading = false;
+        });
+      }
     });
   }
 
@@ -372,7 +122,14 @@ class _StudentDashboardState extends State<StudentDashboard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to open material: $e')),
+          SnackBar(
+            content: Text('Failed to open material: $e'),
+            backgroundColor: AppTheme.errorRed,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+            ),
+          ),
         );
       }
     }
@@ -388,22 +145,33 @@ class _StudentDashboardState extends State<StudentDashboard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Row(
+            content: const Row(
               children: [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 8),
+                Icon(Icons.check_circle, color: AppTheme.white),
+                SizedBox(width: AppTheme.spacingS),
                 Text('Opening file...'),
               ],
             ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 1),
+            backgroundColor: AppTheme.successGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+            ),
+            duration: const Duration(seconds: 1),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to open file: $e')),
+          SnackBar(
+            content: Text('Failed to open file: $e'),
+            backgroundColor: AppTheme.errorRed,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+            ),
+          ),
         );
       }
     }
@@ -413,23 +181,25 @@ class _StudentDashboardState extends State<StudentDashboard> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusL),
+        ),
+        title: const Row(
           children: [
             Icon(Icons.wifi_off, color: Colors.orange, size: 32),
-            SizedBox(width: 12),
+            SizedBox(width: AppTheme.spacingM),
             Text('Offline'),
           ],
         ),
         content: Text(
           'You are offline and "$materialName" is not downloaded.\n\n'
           'Please connect to internet and download it first.',
-          style: TextStyle(fontSize: 16),
+          style: const TextStyle(fontSize: 16, fontFamily: 'Roboto'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('OK', style: TextStyle(fontSize: 16)),
+            child: const Text('OK', style: TextStyle(fontSize: 16)),
           ),
         ],
       ),
@@ -447,7 +217,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
       if (exists) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('✅ File already downloaded')),
+            const SnackBar(
+              content: Text('✅ File already downloaded'),
+              backgroundColor: AppTheme.successGreen,
+              behavior: SnackBarBehavior.floating,
+            ),
           );
         }
         return;
@@ -457,23 +231,26 @@ class _StudentDashboardState extends State<StudentDashboard> {
         final confirm = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text('Download for Offline'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusL),
+            ),
+            title: const Text('Download for Offline'),
             content: Text(
               'Download "${material.name}" to access offline?\n\n'
               'File will be compressed to save space.',
+              style: const TextStyle(fontFamily: 'Roboto'),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: Text('Cancel'),
+                child: const Text('Cancel'),
               ),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF66BB6A),
+                  backgroundColor: AppTheme.successGreen,
                 ),
-                child: Text('Download'),
+                child: const Text('Download'),
               ),
             ],
           ),
@@ -484,19 +261,20 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
       if (!mounted) return;
       
-      bool isDialogShowing = true;
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => WillPopScope(
           onWillPop: () async => false,
           child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            content: Column(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusL),
+            ),
+            content: const Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 CircularProgressIndicator(),
-                SizedBox(height: 20),
+                SizedBox(height: AppTheme.spacingM),
                 Text('Downloading...', textAlign: TextAlign.center),
               ],
             ),
@@ -508,38 +286,32 @@ class _StudentDashboardState extends State<StudentDashboard> {
         await DownloadManager.downloadAndStore(classCode, material);
         await _loadStorageStats();
         
-        if (mounted && isDialogShowing) {
-          Navigator.pop(context);
-          isDialogShowing = false;
-        }
-        
         if (mounted) {
+          Navigator.pop(context);
           setState(() {});
           
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            const SnackBar(
               content: Row(
                 children: [
-                  Icon(Icons.check_circle, color: Colors.white),
-                  SizedBox(width: 8),
+                  Icon(Icons.check_circle, color: AppTheme.white),
+                  SizedBox(width: AppTheme.spacingS),
                   Expanded(child: Text('✅ Downloaded!')),
                 ],
               ),
-              backgroundColor: Colors.green,
+              backgroundColor: AppTheme.successGreen,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
       } catch (e) {
-        if (mounted && isDialogShowing) {
-          Navigator.pop(context);
-          isDialogShowing = false;
-        }
-        
         if (mounted) {
+          Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Download failed: $e'),
-              backgroundColor: Colors.red,
+              backgroundColor: AppTheme.errorRed,
+              behavior: SnackBarBehavior.floating,
             ),
           );
         }
@@ -547,79 +319,14 @@ class _StudentDashboardState extends State<StudentDashboard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: AppTheme.errorRed,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
-  }
-
-  Future<void> _handleDeleteFile(FileRecord file) async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Delete File'),
-        content: Text('Delete "${file.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                await DownloadManager.deleteFile(file.localPath);
-                await OfflineDB.deleteFileRecord(file.classCode, file.name);
-                await _loadStorageStats();
-                setState(() {});
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('✅ Deleted')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed: $e')),
-                  );
-                }
-              }
-            },
-            child: Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleLogout() async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Logout'),
-        content: Text('Are you sure?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-              await authProvider.logout();
-              if (mounted) {
-                Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-              }
-            },
-            child: Text('Logout'),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -627,27 +334,24 @@ class _StudentDashboardState extends State<StudentDashboard> {
     final authProvider = Provider.of<AuthProvider>(context);
 
     if (authProvider.user == null || authProvider.userRole != 'student') {
-      return Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return const Scaffold(
+        body: LoadingIndicator(),
       );
     }
 
     return Scaffold(
-      backgroundColor: Color(0xFFF5F5F5),
+      backgroundColor: AppTheme.lightGrey,
       body: _buildBody(),
       bottomNavigationBar: _buildBottomNav(),
-      
-      // Floating action button for Join Class
       floatingActionButton: _currentTab == 0 && _classes.isEmpty
           ? FloatingActionButton.extended(
-              key: _joinClassKey,
               onPressed: () => Navigator.pushNamed(context, '/student/join-class'),
-              icon: Icon(Icons.add, size: 28),
-              label: Text(
+              icon: const Icon(Icons.add, size: 28),
+              label: const Text(
                 'Join Class',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              backgroundColor: Color(0xFF66BB6A),
+              backgroundColor: AppTheme.successGreen,
             )
           : null,
     );
@@ -656,239 +360,464 @@ class _StudentDashboardState extends State<StudentDashboard> {
   Widget _buildBody() {
     switch (_currentTab) {
       case 0:
-        return _buildClassesTab();
+        return _buildDashboardTab();
       case 1:
-        return _buildAIToolsTab();
+        return const NotificationsScreen();
       case 2:
-        return _buildSettingsTab();
+        return const ProfileScreen();
       default:
-        return _buildClassesTab();
+        return _buildDashboardTab();
     }
   }
 
-  // 🏠 TAB 1: MY CLASSES
-  Widget _buildClassesTab() {
+  // 🏠 TAB 1: DASHBOARD (Classes + AI Tools)
+  Widget _buildDashboardTab() {
     return SafeArea(
-      child: Column(
-        children: [
+      child: CustomScrollView(
+        slivers: [
           // Header
-          Container(
-            padding: EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.all(AppTheme.spacingL),
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
               ),
-            ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.school, color: Colors.white, size: 32),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'My Classes',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.dashboard_rounded, color: AppTheme.white, size: 32),
+                      const SizedBox(width: AppTheme.spacingM),
+                      const Expanded(
+                        child: Text(
+                          'Dashboard',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.white,
+                            fontFamily: 'Roboto',
+                          ),
                         ),
                       ),
-                    ),
-                    // Status Badge
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _isOnline ? Colors.green : Colors.orange,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      OfflineIndicator(isOnline: _isOnline),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Quick Stats
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingM),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: RoundedCard(
+                      padding: const EdgeInsets.all(AppTheme.spacingM),
+                      child: Column(
                         children: [
-                          Icon(
-                            _isOnline ? Icons.wifi : Icons.wifi_off,
-                            color: Colors.white,
-                            size: 16,
-                          ),
-                          SizedBox(width: 4),
+                          const Icon(Icons.class_, color: AppTheme.primaryBlue, size: 32),
+                          const SizedBox(height: AppTheme.spacingS),
                           Text(
-                            _isOnline ? 'Online' : 'Offline',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
+                            '${_classes.length}',
+                            style: const TextStyle(
+                              fontSize: 24,
                               fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                          const Text(
+                            'Classes',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                              fontFamily: 'Roboto',
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Classes List
-          Expanded(
-            child: _loading
-                ? Center(child: CircularProgressIndicator())
-                : _classes.isEmpty
-                    ? _buildEmptyClasses()
-                    : ListView.builder(
-                        padding: EdgeInsets.all(16),
-                        itemCount: _classes.length,
-                        itemBuilder: (context, index) => _buildSimpleClassCard(_classes[index], index),
+                  ),
+                  const SizedBox(width: AppTheme.spacingM),
+                  Expanded(
+                    child: RoundedCard(
+                      padding: const EdgeInsets.all(AppTheme.spacingM),
+                      child: Column(
+                        children: [
+                          const Icon(Icons.insert_drive_file, color: AppTheme.successGreen, size: 32),
+                          const SizedBox(height: AppTheme.spacingS),
+                          Text(
+                            '${_classes.fold(0, (sum, c) => sum + c.materials.length)}',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                          const Text(
+                            'Materials',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondary,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                        ],
                       ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSimpleClassCard(ClassModel classModel, int index) {
-    return Card(
-      key: index == 0 ? _firstClassCardKey : null, // ONLY apply to first card
-      margin: EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 3,
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Class Name
-            Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Color(0xFF4A90E2).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.class_, color: Color(0xFF4A90E2), size: 24),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    classModel.className,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            
-            SizedBox(height: 12),
-            
-            // Class Code
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Color(0xFFE3F2FD),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.tag, size: 16, color: Color(0xFF4A90E2)),
-                  SizedBox(width: 4),
-                  Text(
-                    'Code: ${classModel.classCode}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF4A90E2),
                     ),
                   ),
                 ],
               ),
             ),
-            
-            if (classModel.description.isNotEmpty) ...[
-              SizedBox(height: 8),
-              Text(
-                classModel.description,
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-            
-            Divider(height: 24),
-            
-            // Materials Count
-            Row(
-              children: [
-                Icon(Icons.insert_drive_file, size: 20, color: Color(0xFF66BB6A)),
-                SizedBox(width: 8),
-                Text(
-                  '${classModel.materials.length} Files',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF66BB6A),
+          ),
+
+          // AI Tools Section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingM),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'AI Tools',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                      fontFamily: 'Roboto',
+                    ),
                   ),
-                ),
-              ],
-            ),
-            
-            if (classModel.materials.isNotEmpty) ...[
-              SizedBox(height: 12),
-              ...classModel.materials.asMap().entries.map((entry) =>
-                _buildMaterialRow(classModel.classCode, entry.value, entry.key)
+                  const SizedBox(height: AppTheme.spacingM),
+                  _buildAIToolCard(
+                    icon: Icons.auto_awesome,
+                    title: 'Summary & Quiz',
+                    subtitle: 'Generate from PDFs',
+                    color: AppTheme.primaryBlue,
+                    onTap: () => Navigator.pushNamed(context, '/student/summary-quiz'),
+                  ),
+                  const SizedBox(height: AppTheme.spacingM),
+                  _buildAIToolCard(
+                    icon: Icons.smart_toy,
+                    title: 'Download AI Model',
+                    subtitle: 'Better summaries (678MB)',
+                    color: Colors.orange,
+                    onTap: () => Navigator.pushNamed(context, '/student/model-download'),
+                  ),
+                ],
               ),
-            ],
-          ],
-        ),
+            ),
+          ),
+
+          // Library Section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingM),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Library',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                      fontFamily: 'Roboto',
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacingM),
+                  _buildAIToolCard(
+                    icon: Icons.library_books,
+                    title: 'Offline Content',
+                    subtitle: 'View downloaded materials',
+                    color: AppTheme.secondaryBlue,
+                    onTap: () => Navigator.pushNamed(context, '/student/offline-content'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Classes Section
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(AppTheme.spacingM),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'My Classes',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                      fontFamily: 'Roboto',
+                    ),
+                  ),
+                  if (_classes.isNotEmpty)
+                    Text(
+                      '${_classes.length}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: AppTheme.textSecondary,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+          // Classes List
+          _loading
+              ? const SliverFillRemaining(
+                  child: LoadingIndicator(),
+                )
+              : _classes.isEmpty
+                  ? SliverFillRemaining(
+                      child: EmptyState(
+                        icon: Icons.class_,
+                        title: 'No Classes Yet',
+                        message: 'Join your first class to get started!',
+                        actionLabel: 'Join Class',
+                        onAction: () => Navigator.pushNamed(context, '/student/join-class'),
+                      ),
+                    )
+                  : SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppTheme.spacingM,
+                            vertical: AppTheme.spacingS,
+                          ),
+                          child: _buildClassCard(_classes[index]),
+                        ),
+                        childCount: _classes.length,
+                      ),
+                    ),
+        ],
       ),
     );
   }
 
-  Widget _buildMaterialRow(String classCode, ClassMaterial material, int materialIndex) {
+  Widget _buildAIToolCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return RoundedCard(
+      onTap: onTap,
+      padding: const EdgeInsets.all(AppTheme.spacingL),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppTheme.spacingM),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(AppTheme.radiusM),
+            ),
+            child: Icon(icon, size: 32, color: color),
+          ),
+          const SizedBox(width: AppTheme.spacingM),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                    fontFamily: 'Roboto',
+                  ),
+                ),
+                const SizedBox(height: AppTheme.spacingXS),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppTheme.textSecondary,
+                    fontFamily: 'Roboto',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.arrow_forward_ios, size: 20, color: AppTheme.textSecondary),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClassCard(ClassModel classModel) {
+    return RoundedCard(
+      padding: const EdgeInsets.all(AppTheme.spacingM),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Class Header
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppTheme.spacingS),
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryBlue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusS),
+                ),
+                child: const Icon(Icons.class_, color: AppTheme.primaryBlue, size: 24),
+              ),
+              const SizedBox(width: AppTheme.spacingM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      classModel.className,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingXS),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacingS,
+                        vertical: AppTheme.spacingXS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryBlue.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusS),
+                      ),
+                      child: Text(
+                        'Code: ${classModel.classCode}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.primaryBlue,
+                          fontFamily: 'Roboto',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          if (classModel.description.isNotEmpty) ...[
+            const SizedBox(height: AppTheme.spacingM),
+            Text(
+              classModel.description,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+                fontFamily: 'Roboto',
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+
+          if (classModel.materials.isNotEmpty) ...[
+            const SizedBox(height: AppTheme.spacingM),
+            const Divider(),
+            const SizedBox(height: AppTheme.spacingM),
+            Row(
+              children: [
+                const Icon(Icons.insert_drive_file, size: 20, color: AppTheme.successGreen),
+                const SizedBox(width: AppTheme.spacingS),
+                Text(
+                  '${classModel.materials.length} Materials',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.successGreen,
+                    fontFamily: 'Roboto',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppTheme.spacingM),
+            ...classModel.materials.take(3).map((material) => _buildMaterialRow(
+              classCode: classModel.classCode,
+              material: material,
+            )),
+            if (classModel.materials.length > 3)
+              Padding(
+                padding: const EdgeInsets.only(top: AppTheme.spacingS),
+                child: Text(
+                  '+ ${classModel.materials.length - 3} more',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppTheme.textSecondary,
+                    fontFamily: 'Roboto',
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMaterialRow({
+    required String classCode,
+    required ClassMaterial material,
+  }) {
     return FutureBuilder<bool>(
       future: _isMaterialDownloaded(classCode, material.name),
       builder: (context, snapshot) {
         final isDownloaded = snapshot.data ?? false;
         
         return Container(
-          margin: EdgeInsets.only(bottom: 8),
-          padding: EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: AppTheme.spacingS),
+          padding: const EdgeInsets.all(AppTheme.spacingS),
           decoration: BoxDecoration(
-            color: isDownloaded ? Color(0xFFE8F5E9) : Colors.grey[100],
-            borderRadius: BorderRadius.circular(10),
+            color: isDownloaded
+                ? AppTheme.successGreen.withOpacity(0.1)
+                : AppTheme.lightGrey,
+            borderRadius: BorderRadius.circular(AppTheme.radiusS),
           ),
           child: Row(
             children: [
               Icon(
                 isDownloaded ? Icons.download_done : Icons.picture_as_pdf,
-                color: isDownloaded ? Color(0xFF66BB6A) : Colors.red,
+                color: isDownloaded ? AppTheme.successGreen : AppTheme.errorRed,
                 size: 20,
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: AppTheme.spacingS),
               Expanded(
                 child: Text(
                   material.name,
-                  style: TextStyle(fontSize: 13),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontFamily: 'Roboto',
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (isDownloaded)
                 IconButton(
-                  icon: Icon(Icons.open_in_new, size: 20, color: Color(0xFF4A90E2)),
+                  icon: const Icon(Icons.open_in_new, size: 20, color: AppTheme.primaryBlue),
                   onPressed: () => _handleMaterialClick(classCode, material),
                   padding: EdgeInsets.zero,
-                  constraints: BoxConstraints(),
+                  constraints: const BoxConstraints(),
                 )
               else if (_isOnline)
                 IconButton(
-                  key: materialIndex == 0 ? _firstDownloadButtonKey : null, // Key on DOWNLOAD button
-                  icon: Icon(Icons.download, size: 20, color: Color(0xFF4A90E2)),
+                  icon: const Icon(Icons.download, size: 20, color: AppTheme.primaryBlue),
                   onPressed: () => _handleDownloadMaterial(classCode, material),
                   padding: EdgeInsets.zero,
-                  constraints: BoxConstraints(),
+                  constraints: const BoxConstraints(),
                 ),
             ],
           ),
@@ -897,287 +826,32 @@ class _StudentDashboardState extends State<StudentDashboard> {
     );
   }
 
-  Widget _buildEmptyClasses() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.class_, size: 80, color: Colors.grey[300]),
-          SizedBox(height: 16),
-          Text(
-            'No Classes Yet',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 8),
-          Text('Join your first class!', style: TextStyle(color: Colors.grey)),
-          SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/student/join-class'),
-            icon: Icon(Icons.add, size: 24),
-            label: Text('Join Class', style: TextStyle(fontSize: 16)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Color(0xFF66BB6A),
-              padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 🤖 TAB 2: AI TOOLS
-  Widget _buildAIToolsTab() {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '🤖 AI Tools',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 24),
-            
-            _buildBigAIButton(
-              icon: Icons.auto_awesome,
-              title: 'Summary & Quiz',
-              subtitle: 'Generate from PDFs',
-              color: Color(0xFF4A90E2),
-              onTap: () => Navigator.pushNamed(context, '/student/summary-quiz'),
-            ),
-            
-            SizedBox(height: 16),
-            
-            _buildBigAIButton(
-              icon: Icons.smart_toy,
-              title: 'Download AI Model',
-              subtitle: 'Better summaries (678MB)',
-              color: Color(0xFFFF9800),
-              onTap: () => Navigator.pushNamed(context, '/student/model-download'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBigAIButton({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [color, color.withOpacity(0.8)],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 12,
-              offset: Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(icon, size: 48, color: Colors.white),
-            ),
-            SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.white70,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios, color: Colors.white),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ⚙️ TAB 3: SETTINGS
-  Widget _buildSettingsTab() {
-    final authProvider = Provider.of<AuthProvider>(context);
-    
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '⚙️ Settings',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 24),
-            
-            // Profile Card
-            Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: EdgeInsets.all(20),
-                child: Column(
-                  children: [
-                    CircleAvatar(
-                      radius: 40,
-                      backgroundColor: Color(0xFF4A90E2),
-                      child: Icon(Icons.person, size: 40, color: Colors.white),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      authProvider.user?.email ?? '',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 4),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFE3F2FD),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'Student',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF4A90E2),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            
-            SizedBox(height: 24),
-            
-            // Storage Stats
-            if (_storageStats.spaceSaved > 0)
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                color: Color(0xFFE8F5E9),
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Row(
-                    children: [
-                      Icon(Icons.savings, color: Color(0xFF66BB6A), size: 32),
-                      SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Storage Saved',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[700],
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              '${(_storageStats.spaceSaved / 1024 / 1024).toStringAsFixed(1)} MB',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF66BB6A),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            
-            SizedBox(height: 16),
-            
-            // Logout Button
-            ElevatedButton.icon(
-              onPressed: _handleLogout,
-              icon: Icon(Icons.logout, size: 24),
-              label: Text('Logout', style: TextStyle(fontSize: 18)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // Bottom Navigation
   Widget _buildBottomNav() {
     return Container(
       decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, -2),
-          ),
-        ],
+        boxShadow: AppTheme.softShadow,
       ),
       child: BottomNavigationBar(
         currentIndex: _currentTab,
         onTap: (index) => setState(() => _currentTab = index),
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: Color(0xFF4A90E2),
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: AppTheme.primaryBlue,
+        unselectedItemColor: AppTheme.secondaryTextGrey,
         selectedFontSize: 12,
         unselectedFontSize: 12,
-        items: [
+        items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home, size: 28),
-            label: 'Classes',
+            icon: Icon(Icons.dashboard_rounded, size: 28),
+            label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.auto_awesome, size: 28, key: _aiToolsTabKey),
-            label: 'AI Tools',
+            icon: Icon(Icons.notifications_outlined, size: 28),
+            label: 'Notifications',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.settings, size: 28, key: _settingsTabKey),
-            label: 'Settings',
+            icon: Icon(Icons.person_outline, size: 28),
+            label: 'Profile',
           ),
         ],
       ),

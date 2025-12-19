@@ -6,14 +6,28 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ModelDownloader {
-  static final Dio _dio = Dio();
+  static final Dio _dio = Dio(
+    BaseOptions(
+      headers: {
+        'User-Agent': 'GYAANSETU-Mobile/1.0',
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate',
+      },
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(minutes: 30),
+      followRedirects: true,
+      validateStatus: (status) => status != null && status < 500,
+    ),
+  );
   static CancelToken? _cancelToken;
   static bool _isDownloading = false; // Separate flag for download state tracking
   
-  // CHANGE THIS TO YOUR S3 URL AFTER UPLOADING
-  static const String MODEL_URL = 'https://study2material.s3.eu-north-1.amazonaws.com/model/model.gguf';
-  static const String MODEL_FILENAME = 'model.gguf';
-  static const int EXPECTED_SIZE = 678 * 1024 * 1024; // 678 MB in bytes
+  // Model file URL from S3 bucket
+  static const String MODEL_URL = 'https://study2material1.s3.eu-north-1.amazonaws.com/Model-2.0+(1).7z';
+  static const String MODEL_FILENAME = 'Model-2.0+(1).7z';
+  // Note: Expected size may need adjustment based on actual file size
+  // .7z is a compressed archive format
+  static const int EXPECTED_SIZE = 678 * 1024 * 1024; // 678 MB in bytes (update if needed)
   
   // Check if model is already downloaded
   static Future<bool> isModelDownloaded() async {
@@ -109,27 +123,56 @@ class ModelDownloader {
       final options = Options(
         responseType: ResponseType.stream,
         headers: {
+          'User-Agent': 'GYAANSETU-Mobile/1.0',
+          'Accept': '*/*',
           if (existingBytes > 0) 'Range': 'bytes=$existingBytes-',
         },
         receiveTimeout: const Duration(minutes: 30), // Long timeout for large files
+        followRedirects: true,
+        validateStatus: (status) => status != null && status < 500,
       );
       
-      // Get response as stream
-      final response = await _dio.get(
-        MODEL_URL,
-        options: options,
-        cancelToken: _cancelToken,
-      );
+      // Get response as stream with error handling
+      Response response;
+      try {
+        response = await _dio.get(
+          MODEL_URL,
+          options: options,
+          cancelToken: _cancelToken,
+        );
+      } on DioException catch (dioError) {
+        _isDownloading = false;
+        print('❌ [ModelDownloader] DioException: ${dioError.type}');
+        print('   Status Code: ${dioError.response?.statusCode}');
+        print('   Message: ${dioError.message}');
+        
+        if (dioError.response?.statusCode == 403) {
+          onError(
+            'Access denied (403). The model file may be private or the URL has expired. '
+            'Please check your internet connection and try again later.'
+          );
+          return;
+        } else if (dioError.response?.statusCode == 404) {
+          onError(
+            'Model file not found (404). The file may have been moved. '
+            'Please contact support.'
+          );
+          return;
+        } else if (dioError.type == DioExceptionType.connectionTimeout) {
+          onError('Connection timeout. Please check your internet connection and try again.');
+          return;
+        } else {
+          onError('Download failed: ${dioError.message ?? dioError.toString()}');
+          return;
+        }
+      }
       
       // Check response status
       final statusCode = response.statusCode ?? 0;
-      if (statusCode != 200 && statusCode != 206) {
-        throw DioException(
-          requestOptions: response.requestOptions,
-          response: response,
-          type: DioExceptionType.badResponse,
-          message: 'Unexpected status code: $statusCode',
-        );
+      if (statusCode != 200 && statusCode != 206 && statusCode != 416) {
+        _isDownloading = false;
+        onError('Unexpected status code: $statusCode. Please try again.');
+        return;
       }
       
       // Handle 416 Range Not Satisfiable - delete partial file and restart
@@ -289,7 +332,17 @@ class ModelDownloader {
         _isDownloading = false;
         
         // Handle specific error cases
-        if (e.response?.statusCode == 416) {
+        if (e.response?.statusCode == 403) {
+          onError(
+            'Access denied (403). The model file may be private or the URL has expired. '
+            'Please check your internet connection and try again later.'
+          );
+        } else if (e.response?.statusCode == 404) {
+          onError(
+            'Model file not found (404). The file may have been moved. '
+            'Please contact support.'
+          );
+        } else if (e.response?.statusCode == 416) {
           print('⚠️ [ModelDownloader] Server doesn\'t support resume, deleting partial file...');
           
           final appDir = await getApplicationDocumentsDirectory();

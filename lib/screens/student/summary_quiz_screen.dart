@@ -16,6 +16,10 @@ import '../../services/translation_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../services/server_api_service.dart';
 import '../../widgets/model_selection_dialog.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/common/rounded_card.dart';
+import '../../services/streak_service.dart';
+import '../../widgets/common/milestone_dialog.dart';
 import 'summary_quiz_online_service.dart';
 import 'summary_quiz_offline_service.dart';
 import 'onboarding_content_widgets.dart';
@@ -346,7 +350,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.language, color: Color(0xFF4A90E2)),
+            Icon(Icons.language, color: AppTheme.primaryBlue),
             SizedBox(width: 8),
             Text('Select Language'),
           ],
@@ -379,7 +383,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
         decoration: BoxDecoration(
           color: const Color(0xFFE3F2FD),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF4A90E2)),
+          border: Border.all(color: AppTheme.primaryBlue),
         ),
         child: Row(
           children: [
@@ -407,7 +411,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
           '🤖 AI Summary & Quiz',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF4A90E2),
+        backgroundColor: AppTheme.primaryBlue,
         elevation: 0,
       ),
       body: _loading
@@ -478,7 +482,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
               icon: Icon(Icons.arrow_back, size: 20),
               label: Text('Go Back to Classes'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF4A90E2),
+                backgroundColor: AppTheme.primaryBlue,
                 padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -508,7 +512,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.lightbulb, color: Color(0xFF4A90E2), size: 24),
+            child: Icon(Icons.lightbulb, color: AppTheme.primaryBlue, size: 24),
           ),
           SizedBox(width: 12),
           Expanded(
@@ -729,7 +733,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
                         height: 32,
                         child: CircularProgressIndicator(
                           strokeWidth: 3,
-                          valueColor: AlwaysStoppedAnimation(Color(0xFF4A90E2)),
+                          valueColor: AlwaysStoppedAnimation(AppTheme.primaryBlue),
                         ),
                       ),
                       SizedBox(height: 12),
@@ -760,7 +764,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
                           ),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF4A90E2),
+                          backgroundColor: AppTheme.primaryBlue,
                           foregroundColor: Colors.white,
                           padding: EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
@@ -1064,7 +1068,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     }
   }
 
-  void _submitQuiz() {
+  Future<void> _submitQuiz() async {
     if (userAnswers.length < widget.quiz.length) {
       showDialog(
         context: context,
@@ -1101,6 +1105,23 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     final score = (correct / widget.quiz.length * 100).toStringAsFixed(0);
     _saveQuizResult(correct, widget.quiz.length);
 
+    // Increment streak for completing quiz
+    final streakIncremented = await StreakService.incrementStreak();
+    
+    // Check for milestone achievement
+    if (streakIncremented) {
+      final milestone = await StreakService.checkForNewMilestone();
+      if (milestone != null && mounted) {
+        // Show milestone dialog after quiz results dialog
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            await MilestoneDialog.show(context, milestone);
+          }
+        });
+      }
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1113,7 +1134,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
               style: const TextStyle(
                 fontSize: 48,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF4A90E2),
+                color: AppTheme.primaryBlue,
               ),
             ),
             const SizedBox(height: 16),
@@ -1335,7 +1356,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         child: Scaffold(
           appBar: AppBar(
             title: Text(widget.fileName),
-            backgroundColor: const Color(0xFF4A90E2),
+            backgroundColor: AppTheme.primaryBlue,
             // 🆕 ADD THIS ACTIONS ARRAY
             actions: [
               // Chatbot button - NEW!
@@ -1429,7 +1450,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                       child: Icon(
                         _isTTSSpeaking ? Icons.stop_circle : Icons.volume_up,
                         key: ValueKey(_isTTSSpeaking),
-                        color: _isTTSSpeaking ? Colors.red : Color(0xFF4A90E2),
+                        color: _isTTSSpeaking ? Colors.red : AppTheme.primaryBlue,
                         size: 32,
                       ),
                     ),
@@ -1471,22 +1492,26 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(16),
-                color: const Color(0xFFE3F2FD),
+                color: AppTheme.primaryBlue.withOpacity(0.1),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '${userAnswers.length}/${widget.quiz.length} answered',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                    Flexible(
+                      child: Text(
+                        '${userAnswers.length}/${widget.quiz.length} answered',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     if (!showResults)
                       ElevatedButton(
                         onPressed: _submitQuiz,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF66BB6A),
+                          backgroundColor: AppTheme.successGreen,
                         ),
                         child: const Text('Submit Quiz'),
                       ),
@@ -1554,6 +1579,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 5,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1563,7 +1590,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                       decoration: BoxDecoration(
                         color: isCurrentVoiceQuestion 
                             ? Colors.red.withOpacity(0.1) 
-                            : Color(0xFF4A90E2).withOpacity(0.1),
+                            : AppTheme.primaryBlue.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: IconButton(
@@ -1577,7 +1604,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                             key: ValueKey('$isCurrentVoiceQuestion-$_isSTTListening'),
                             color: isCurrentVoiceQuestion
                                 ? (_isSTTListening ? Colors.red : Colors.orange)
-                                : Color(0xFF4A90E2),
+                                : AppTheme.primaryBlue,
                             size: 24,
                           ),
                         ),
@@ -1672,7 +1699,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: isSelected 
-                            ? const Color(0xFF4A90E2) 
+                            ? AppTheme.primaryBlue 
                             : Colors.grey[300]!,
                           width: isSelected ? 2 : 1,
                         ),
@@ -1686,7 +1713,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                               color: showResults && isCorrect 
                                 ? Colors.green 
                                 : isSelected 
-                                  ? const Color(0xFF4A90E2) 
+                                  ? AppTheme.primaryBlue 
                                   : Colors.grey[300],
                               borderRadius: BorderRadius.circular(4),
                             ),
@@ -1710,6 +1737,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                                 color: textColor,
                               ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           if (showResults && isCorrect)
@@ -1723,7 +1752,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                 );
               }).toList(),
               
-              if (showResults)
+              if (showResults) ...[
                 Container(
                   margin: const EdgeInsets.only(top: 8),
                   padding: const EdgeInsets.all(12),
@@ -1748,6 +1777,9 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                     ],
                   ),
                 ),
+                // Explanation Card
+                _buildExplanationCard(q['explanation'] as String?),
+              ],
             ],
           ),
         ),
@@ -1764,6 +1796,64 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         ),
       );
     }
+  }
+
+  /// Build explanation card widget
+  Widget _buildExplanationCard(String? explanation) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: Container(
+        key: ValueKey(explanation),
+        margin: const EdgeInsets.only(top: 12),
+        child: RoundedCard(
+          padding: const EdgeInsets.all(AppTheme.spacingM),
+          color: AppTheme.primaryBlue.withOpacity(0.05),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppTheme.spacingS),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryBlue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusS),
+                    ),
+                    child: const Icon(
+                      Icons.lightbulb_outline,
+                      color: AppTheme.primaryBlue,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: AppTheme.spacingM),
+                  const Text(
+                    'Explanation',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.textPrimary,
+                      fontFamily: 'Roboto',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppTheme.spacingM),
+              Text(
+                explanation ?? 'Review the material for more details.',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: explanation != null 
+                      ? AppTheme.textSecondary 
+                      : AppTheme.textSecondary.withOpacity(0.7),
+                  fontFamily: 'Roboto',
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1924,7 +2014,7 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.account_tree, size: 16, color: Color(0xFF4A90E2)),
+                  Icon(Icons.account_tree, size: 16, color: AppTheme.primaryBlue),
                   SizedBox(width: 8),
                   Text(
                     widget.fileName,
@@ -1964,7 +2054,7 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onPressed,
-          child: Icon(icon, size: 20, color: Color(0xFF4A90E2)),
+          child: Icon(icon, size: 20, color: AppTheme.primaryBlue),
         ),
       ),
     );
@@ -2101,7 +2191,7 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
 
   Color _getNodeColor(int level) {
     final colors = [
-      Color(0xFF4A90E2), // Blue - Root
+      AppTheme.primaryBlue, // Blue - Root
       Color(0xFF66BB6A), // Green - Level 1
       Color(0xFFFF7043), // Orange - Level 2
       Color(0xFFAB47BC), // Purple - Level 3

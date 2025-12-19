@@ -4,6 +4,7 @@ import '../../services/model_downloader.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart'; // 🆕 ADD
 import '../../services/onboarding_service.dart'; // 🆕 ADD
+import '../../theme/app_theme.dart';
 
 class ModelDownloadScreen extends StatefulWidget {
   const ModelDownloadScreen({super.key});
@@ -192,10 +193,10 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
           Container(
             padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Color(0xFF4A90E2).withOpacity(0.1),
+              color: AppTheme.primaryBlue.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, size: 48, color: Color(0xFF4A90E2)),
+            child: Icon(icon, size: 48, color: AppTheme.primaryBlue),
           ),
           SizedBox(height: 16),
           Text(
@@ -231,7 +232,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
               ElevatedButton(
                 onPressed: onNext,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF4A90E2),
+                  backgroundColor: AppTheme.primaryBlue,
                   padding: EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -469,7 +470,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
           '🤖 AI Model Download',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF4A90E2),
+        backgroundColor: AppTheme.primaryBlue,
         elevation: 0,
         centerTitle: true,
       ),
@@ -526,7 +527,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
                   borderRadius: BorderRadius.circular(16),
                   gradient: LinearGradient(
                     colors: [
-                      Color(0xFF4A90E2).withOpacity(0.05),
+                      AppTheme.primaryBlue.withOpacity(0.05),
                       Colors.white,
                     ],
                     begin: Alignment.topLeft,
@@ -543,12 +544,12 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
+                              colors: [AppTheme.primaryBlue, AppTheme.secondaryBlue],
                             ),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color: Color(0xFF4A90E2).withOpacity(0.3),
+                                color: AppTheme.primaryBlue.withOpacity(0.3),
                                 blurRadius: 8,
                                 offset: Offset(0, 4),
                               ),
@@ -677,7 +678,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
                     icon: const Icon(Icons.auto_awesome, size: 20),
                     label: const Text('Use Model'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4A90E2),
+                      backgroundColor: AppTheme.primaryBlue,
                       foregroundColor: Colors.white,
                       padding: EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
@@ -722,7 +723,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
           borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             colors: _isDownloading
-                ? [Color(0xFF4A90E2).withOpacity(0.1), Colors.white]
+                ? [AppTheme.primaryBlue.withOpacity(0.1), Colors.white]
                 : [Colors.orange[50]!, Colors.white],
           ),
         ),
@@ -734,7 +735,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _isDownloading ? Color(0xFF4A90E2) : Colors.orange,
+                    color: _isDownloading ? AppTheme.primaryBlue : Colors.orange,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -750,7 +751,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: _isDownloading ? Color(0xFF4A90E2) : Colors.orange[800],
+                      color: _isDownloading ? AppTheme.primaryBlue : Colors.orange[800],
                     ),
                   ),
                 ),
@@ -767,7 +768,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
                 minHeight: 12,
                 backgroundColor: Colors.grey[200],
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  _isDownloading ? const Color(0xFF4A90E2) : Colors.orange,
+                  _isDownloading ? AppTheme.primaryBlue : Colors.orange,
                 ),
               ),
             ),
@@ -779,7 +780,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
               style: TextStyle(
                 fontSize: 36,
                 fontWeight: FontWeight.bold,
-                color: _isDownloading ? Color(0xFF4A90E2) : Colors.orange[800],
+                color: _isDownloading ? AppTheme.primaryBlue : Colors.orange[800],
               ),
             ),
             const SizedBox(height: 8),
@@ -908,7 +909,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4A90E2),
+              backgroundColor: AppTheme.primaryBlue,
               foregroundColor: Colors.white,
               disabledBackgroundColor: Colors.grey[300],
               shape: RoundedRectangleBorder(
@@ -971,7 +972,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
 Widget _buildInfoRow(IconData icon, String label, String value) {
 return Row(
 children: [
-Icon(icon, size: 18, color: Color(0xFF4A90E2)),
+Icon(icon, size: 18, color: AppTheme.primaryBlue),
 SizedBox(width: 8),
 Text(
 label,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../theme/app_theme.dart';
+import '../services/streak_service.dart';
+import '../widgets/common/milestone_dialog.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -9,11 +12,46 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+
   @override
   void initState() {
     super.initState();
+    _setupAnimations();
     _checkAuth();
+  }
+
+  void _setupAnimations() {
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeIn,
+      ),
+    );
+
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   Future<void> _checkAuth() async {
@@ -28,6 +66,23 @@ class _SplashScreenState extends State<SplashScreen> {
     while (authProvider.loading && attempts < 50) {
       await Future.delayed(const Duration(milliseconds: 100));
       attempts++;
+    }
+
+    // Check and update streak
+    final streakIncremented = await StreakService.checkAndUpdateStreak();
+    
+    // Check for milestone achievement
+    if (streakIncremented) {
+      final milestone = await StreakService.checkForNewMilestone();
+      if (milestone != null && mounted) {
+        // Show milestone dialog after navigation
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (mounted) {
+            await MilestoneDialog.show(context, milestone);
+          }
+        });
+      }
     }
 
     // Minimum splash screen time for better UX
@@ -77,52 +132,92 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // App Logo/Icon
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF4A90E2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Icon(
-                Icons.school,
-                size: 64,
-                color: Colors.white,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: AppTheme.primaryGradient,
+        ),
+        child: SafeArea(
+          child: Center(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // App Logo with shadow
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'Logo.jpg',
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingXL),
+                    const Text(
+                      'GYAANSETU',
+                      style: TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.white,
+                        letterSpacing: 2,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingS),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacingL,
+                        vertical: AppTheme.spacingXS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusXL),
+                      ),
+                      child: const Text(
+                        'Learning without limits',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.white,
+                          fontWeight: FontWeight.w500,
+                          fontFamily: 'Roboto',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: AppTheme.spacingXXL),
+                    const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.white),
+                      strokeWidth: 3,
+                    ),
+                    const SizedBox(height: AppTheme.spacingM),
+                    const Text(
+                      'Checking session...',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.white,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 32),
-            const Text(
-              'GyaanSetu',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF4A90E2),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Offline-First Learning Platform',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 40),
-            const CircularProgressIndicator(color: Color(0xFF4A90E2)),
-            const SizedBox(height: 16),
-            Text(
-              'Checking session...',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
