@@ -11,7 +11,7 @@ class ModelDownloader {
   static bool _isDownloading = false; // Separate flag for download state tracking
   
   // CHANGE THIS TO YOUR S3 URL AFTER UPLOADING
-  static const String MODEL_URL = 'https://study2material.s3.eu-north-1.amazonaws.com/model/model.gguf';
+  static const String MODEL_URL = 'https://study2material1.s3.eu-north-1.amazonaws.com/model.gguf';
   static const String MODEL_FILENAME = 'model.gguf';
   static const int EXPECTED_SIZE = 678 * 1024 * 1024; // 678 MB in bytes
   

@@ -10,6 +10,8 @@ import '../../services/download_manager.dart';
 import 'package:claudetest/services/quiz_sync_service.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import '../../services/onboarding_service.dart';
+import 'package:claudetest/widgets/streak_widget.dart';
+import 'package:claudetest/services/streak_service.dart';
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -668,82 +670,85 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   // 🏠 TAB 1: MY CLASSES
   Widget _buildClassesTab() {
-    return SafeArea(
-      child: Column(
-        children: [
-          // Header
-          Container(
-            padding: EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
-              ),
+  return SafeArea(
+    child: Column(
+      children: [
+        // Header
+        Container(
+          padding: EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF4A90E2), Color(0xFF357ABD)],
             ),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.school, color: Colors.white, size: 32),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'My Classes',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.school, color: Colors.white, size: 32),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'My Classes',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  // Status Badge
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _isOnline ? Colors.green : Colors.orange,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _isOnline ? Icons.wifi : Icons.wifi_off,
                           color: Colors.white,
+                          size: 16,
                         ),
-                      ),
-                    ),
-                    // Status Badge
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _isOnline ? Colors.green : Colors.orange,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _isOnline ? Icons.wifi : Icons.wifi_off,
+                        SizedBox(width: 4),
+                        Text(
+                          _isOnline ? 'Online' : 'Offline',
+                          style: TextStyle(
                             color: Colors.white,
-                            size: 16,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
                           ),
-                          SizedBox(width: 4),
-                          Text(
-                            _isOnline ? 'Online' : 'Offline',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
+        ),
 
-          // Classes List
-          Expanded(
-            child: _loading
-                ? Center(child: CircularProgressIndicator())
-                : _classes.isEmpty
-                    ? _buildEmptyClasses()
-                    : ListView.builder(
-                        padding: EdgeInsets.all(16),
-                        itemCount: _classes.length,
-                        itemBuilder: (context, index) => _buildSimpleClassCard(_classes[index], index),
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
+        // 🆕 ADD THIS: Streak Widget
+        StreakWidget(),
+
+        // Classes List
+        Expanded(
+          child: _loading
+              ? Center(child: CircularProgressIndicator())
+              : _classes.isEmpty
+                  ? _buildEmptyClasses()
+                  : ListView.builder(
+                      padding: EdgeInsets.all(16),
+                      itemCount: _classes.length,
+                      itemBuilder: (context, index) => _buildSimpleClassCard(_classes[index], index),
+                    ),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildSimpleClassCard(ClassModel classModel, int index) {
     return Card(

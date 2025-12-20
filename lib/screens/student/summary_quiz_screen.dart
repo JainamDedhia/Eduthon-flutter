@@ -20,6 +20,11 @@ import 'summary_quiz_online_service.dart';
 import 'summary_quiz_offline_service.dart';
 import 'onboarding_content_widgets.dart';
 import 'chatbot_screen.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:claudetest/services/streak_service.dart';
+import 'package:claudetest/widgets/streak_widget.dart';
 
 class SummaryQuizScreen extends StatefulWidget {  
   const SummaryQuizScreen({super.key});
@@ -172,6 +177,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     await _generateOfflineMode(file);
     return;
   }
+  await StreakService.recordActivity();
 
   // Has internet - check if server is healthy
   print('🌐 [SummaryQuiz] Checking server health...');
@@ -399,40 +405,48 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Color(0xFFF5F5F5),
-      appBar: AppBar(
-        title: const Text(
-          '🤖 AI Summary & Quiz',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: const Color(0xFF4A90E2),
-        elevation: 0,
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: Color(0xFFF5F5F5),
+    appBar: AppBar(
+      title: const Text(
+        '🤖 AI Summary & Quiz',
+        style: TextStyle(fontWeight: FontWeight.bold),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _offlineFiles.isEmpty
-              ? _buildEmptyState()
-              : Column(
-                  children: [
-                    _buildInfoBanner(),
-                    
-                    if (_processingFile != null) _buildProcessingCard(),
-                    
-                    Expanded(
-                      child: ListView.builder(
-                        key: _fileListKey,
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _offlineFiles.length,
-                        itemBuilder: (context, index) =>
-                            _buildFileCard(_offlineFiles[index], index),
-                      ),
+      backgroundColor: const Color(0xFF4A90E2),
+      elevation: 0,
+    ),
+    body: _loading
+        ? const Center(child: CircularProgressIndicator())
+        : _offlineFiles.isEmpty
+            ? _buildEmptyState()
+            : Column(
+                children: [
+                  _buildInfoBanner(),
+                  
+                  if (_processingFile != null) _buildProcessingCard(),
+                  
+                  Expanded(
+                    child: ListView.builder(
+                      key: _fileListKey,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _offlineFiles.length,
+                      itemBuilder: (context, index) =>
+                          _buildFileCard(_offlineFiles[index], index),
                     ),
-                  ],
-                ),
-    );
-  }
+                  ),
+                ],
+              ),
+    
+    // ADD THIS: Floating Action Button for Upload
+    floatingActionButton: FloatingActionButton(
+      onPressed: _pickAndUploadPdf,
+      backgroundColor: Color(0xFF66BB6A),
+      child: Icon(Icons.add, size: 32),
+      tooltip: 'Upload Personal PDF',
+    ),
+  );
+}
 
   Widget _buildEmptyState() {
     return Center(
@@ -639,6 +653,216 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     if (_progress < 0.95) return 'Drawing mind map...';
     return 'Almost done!';
   }
+  Future<void> _pickAndUploadPdf() async {
+  try {
+    // Pick PDF file
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+    );
+
+    if (result == null || result.files.single.path == null) {
+      print('⚠️ No file selected');
+      return;
+    }
+     await StreakService.recordActivity();
+
+    final file = File(result.files.single.path!);
+    final fileName = result.files.single.name;
+
+    // Check if file already exists
+    final exists = await OfflineDB.checkFileExists('personal', fileName);
+    if (exists) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ File "$fileName" already uploaded'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Check file size (max 10 MB)
+    final fileSize = await file.length();
+    const maxSize = 10 * 1024 * 1024; // 10 MB
+    
+    if (fileSize > maxSize) {
+      if (mounted) {
+        _showFileTooLargeDialog(fileSize);
+      }
+      return;
+    }
+
+    // Show loading dialog
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => WillPopScope(
+          onWillPop: () async => false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 20),
+                Text('Uploading PDF...', style: TextStyle(fontSize: 16)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Copy file to app directory
+    final appDir = await getApplicationDocumentsDirectory();
+    final personalDir = Directory('${appDir.path}/personalFiles');
+    
+    if (!await personalDir.exists()) {
+      await personalDir.create(recursive: true);
+    }
+
+    final sanitizedName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+    final localPath = '${personalDir.path}/$sanitizedName';
+    
+    await file.copy(localPath);
+
+    // Save to database with "personal" classCode
+    await OfflineDB.saveFileRecord(
+      'personal',
+      fileName,
+      localPath,
+      originalSize: fileSize,
+    );
+
+    // Reload files
+    await _loadOfflineFiles();
+
+    if (mounted) {
+      Navigator.pop(context); // Close loading dialog
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(child: Text('✅ PDF uploaded successfully!')),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  } catch (e) {
+    print('❌ Error uploading PDF: $e');
+    
+    if (mounted) {
+      // Close loading dialog if open
+      Navigator.of(context, rootNavigator: true).pop();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Failed to upload: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}
+
+void _showFileTooLargeDialog(int fileSize) {
+  final sizeMB = (fileSize / 1024 / 1024).toStringAsFixed(1);
+  
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Row(
+        children: [
+          Icon(Icons.warning, color: Colors.orange, size: 28),
+          SizedBox(width: 12),
+          Text('File Too Large'),
+        ],
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'This PDF is too large for processing.',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          SizedBox(height: 12),
+          Text('File size: $sizeMB MB', style: TextStyle(fontWeight: FontWeight.bold)),
+          Text('Maximum allowed: 10 MB', style: TextStyle(fontWeight: FontWeight.bold)),
+          SizedBox(height: 16),
+          Container(
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange[200]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.lightbulb, size: 18, color: Colors.orange[800]),
+                    SizedBox(width: 6),
+                    Text(
+                      'Why this limit?',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange[900],
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '• Large PDFs take too long to process\n'
+                  '• Text extraction may fail\n'
+                  '• AI summary quality decreases\n'
+                  '• May cause app to crash',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange[900],
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 16),
+          Text(
+            '💡 Tips to reduce file size:',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          SizedBox(height: 8),
+          Text(
+            '• Split PDF into smaller sections\n'
+            '• Compress using online tools\n'
+            '• Remove unnecessary images/pages',
+            style: TextStyle(fontSize: 12, height: 1.6),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('OK', style: TextStyle(fontSize: 15)),
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildFileCard(FileRecord file, int index) {
     final isProcessing = _processingFile == file.name;
@@ -696,20 +920,26 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
                         ),
                         SizedBox(height: 4),
                         Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Color(0xFFE3F2FD),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'Class: ${file.classCode}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Color(0xFF1976D2),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  decoration: BoxDecoration(
+    color: file.classCode == 'personal' 
+        ? Color(0xFFE8F5E9)  // Green tint for personal files
+        : Color(0xFFE3F2FD),
+    borderRadius: BorderRadius.circular(6),
+  ),
+  child: Text(
+    file.classCode == 'personal' 
+        ? '📱 Personal'  // Show "Personal" label
+        : 'Class: ${file.classCode}',
+    style: TextStyle(
+      fontSize: 11,
+      color: file.classCode == 'personal'
+          ? Color(0xFF2E7D32)
+          : Color(0xFF1976D2),
+      fontWeight: FontWeight.w600,
+    ),
+  ),
+),
                       ],
                     ),
                   ),
@@ -1070,6 +1300,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('⚠️ Incomplete Quiz'),
+          
           content: Text(
             'You have answered ${userAnswers.length} out of ${widget.quiz.length} questions.\n\n'
             'Please answer all questions before submitting.',
@@ -1097,9 +1328,10 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         correct++;
       }
     }
-
+    
     final score = (correct / widget.quiz.length * 100).toStringAsFixed(0);
     _saveQuizResult(correct, widget.quiz.length);
+    _recordStreakActivity();
 
     showDialog(
       context: context,
@@ -1143,6 +1375,19 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       ),
     );
   }
+
+  Future<void> _recordStreakActivity() async {
+  final update = await StreakService.recordActivity();
+  
+  if (update.reachedMilestone && update.milestoneMessage != null) {
+    // Show celebration dialog
+    showMilestoneDialog(
+      context,
+      update.milestoneMessage!,
+      update.currentStreak,
+    );
+  }
+}
 
   Future<void> _toggleSummaryTTS() async {
     if (_isTTSSpeaking) {
