@@ -167,6 +167,8 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     }
   }
 
+  
+
   Future<void> _generateSummaryQuizAndMindMap(FileRecord file) async {
   // Check connectivity first
   final isOnline = await SummaryQuizOnlineService.checkConnectivity();

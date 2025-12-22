@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class ServerAPIService {
   // 🔥 IMPORTANT: Replace with your ngrok/localtunnel URL
-  static const String BASE_URL = "https://lucky-symbols-grow.loca.lt";
+  static const String BASE_URL = "https://three-pugs-mate.loca.lt";
   
   // Request timeout
   static const Duration TIMEOUT = Duration(seconds: 30);
