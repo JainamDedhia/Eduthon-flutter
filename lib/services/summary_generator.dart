@@ -5,7 +5,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:archive/archive_io.dart';
 
 class SummaryGenerator {
-  // Extract text from PDF (handles compressed files)
+  // Extract text from PDF (handles compressed files) - UNCHANGED
   static Future<String> extractTextFromPDF(String pdfPath) async {
     try {
       print('📄 Extracting text from: $pdfPath');
@@ -15,7 +15,6 @@ class SummaryGenerator {
         throw Exception('PDF file not found: $pdfPath');
       }
 
-      // Check if file is compressed (.gz)
       List<int> pdfBytes;
       if (pdfPath.endsWith('.gz')) {
         print('🗜️ Decompressing gzipped PDF...');
@@ -33,7 +32,6 @@ class SummaryGenerator {
         pdfBytes = await file.readAsBytes();
       }
 
-      // Load PDF document
       PdfDocument? document;
       try {
         document = PdfDocument(inputBytes: pdfBytes);
@@ -46,7 +44,6 @@ class SummaryGenerator {
       String extractedText = '';
       int successfulPages = 0;
       
-      // Extract text from each page individually
       for (int i = 0; i < document.pages.count; i++) {
         try {
           String pageText = PdfTextExtractor(document).extractText(
@@ -54,7 +51,6 @@ class SummaryGenerator {
             endPageIndex: i,
           ) ?? '';
 
-          // Fallback extraction method
           if (pageText.trim().isEmpty) {
             try {
               final PdfTextExtractor extractor = PdfTextExtractor(document);
@@ -67,7 +63,6 @@ class SummaryGenerator {
             }
           }
           
-          // Add page text if not empty
           if (pageText.trim().isNotEmpty) {
             extractedText += pageText.trim() + '\n\n';
             successfulPages++;
@@ -84,7 +79,6 @@ class SummaryGenerator {
       final totalPages = document.pages.count;
       document.dispose();
       
-      // Check if any text was extracted
       if (extractedText.trim().isEmpty) {
         throw Exception(
           'Could not extract any text from this PDF.\n\n'
@@ -105,59 +99,53 @@ class SummaryGenerator {
     }
   }
 
-  // Clean text
+  // ENHANCED: Clean text - improved algorithm
   static String cleanText(String text) {
     if (text.isEmpty) return '';
 
-    // Step 1: Basic normalization
+    // Step 1: Normalize whitespace
     text = text.replaceAll('\r\n', '\n');
     text = text.replaceAll('\u00A0', ' ');
     text = text.replaceAll('\t', ' ');
 
-    // Step 2: Remove bracketed citations
+    // Step 2: Remove citations and references
     text = text.replaceAll(RegExp(r'\[[^\]]{1,200}\]'), ' ');
-
-    // Step 3: Remove short parenthetical notes
     text = text.replaceAll(RegExp(r'\(\s*[^\)]{1,120}\s*\)'), ' ');
 
-    // Step 4: Remove explicit junk headers
+    // Step 3: Remove headers and metadata
     text = text.replaceAll(
-      RegExp(r'\b(Reprint|Re-Print|Chapter|Chapter Reprint|EXERCISES?|KEYWORDS)\b', caseSensitive: false),
+      RegExp(r'\b(Reprint|Re-Print|Chapter|EXERCISES?|KEYWORDS?|Bibliography|References)\b', caseSensitive: false),
       ' ',
     );
 
-    // Step 5: Remove ALL CAPS lines - FIXED REGEX
+    // Step 4: Remove ALL CAPS lines (likely headers)
     text = text.replaceAll(RegExp(r'^[A-Z0-9\s\-]{6,}$', multiLine: true), ' ');
 
-    // Step 6: Remove sequences of very short tokens (OCR artifacts)
+    // Step 5: Remove OCR artifacts (short token sequences)
     text = text.replaceAll(RegExp(r'(\b[a-zA-Z]{1,3}\b[\s,;:-]?){3,}'), ' ');
 
-    // Step 7: Remove page numbers and year ranges
+    // Step 6: Remove page numbers and dates
     text = text.replaceAll(RegExp(r'\bPage\s*\d+\b', caseSensitive: false), ' ');
     text = text.replaceAll(RegExp(r'\b202\d[-\–]\d{2}\b'), ' ');
 
-    // Step 8: Remove numbered bullets at line starts
+    // Step 7: Remove list markers
     text = text.replaceAll(RegExp(r'^\s*\(?[0-9]+(?:\.[0-9]+)*\)?\s*', multiLine: true), ' ');
-    text = text.replaceAll(RegExp(r'\(\s*[ivx]+\s*\)\s*', caseSensitive: false), ' ');
 
-    // Step 9: Split into lines and keep only useful ones
+    // Step 8: Filter meaningful lines
     final lines = text.split('\n').where((line) {
       final ln = line.trim();
-      if (ln.isEmpty) return false;
-      if (ln.length < 10) return false;
+      if (ln.isEmpty || ln.length < 15) return false;
       
       // Check alpha ratio
       final alphaCount = ln.split('').where((c) => RegExp(r'[a-zA-Z]').hasMatch(c)).length;
       final alphaRatio = alphaCount / max(1, ln.length);
-      if (alphaRatio < 0.35) return false;
+      if (alphaRatio < 0.4) return false;
 
-      // Drop header-like all-caps lines
+      // Filter header-like lines
       final tokens = RegExp(r'[A-Za-z]{2,}').allMatches(ln).map((m) => m.group(0)!).toList();
       if (tokens.isNotEmpty) {
         final uppercaseCount = tokens.where((t) => t == t.toUpperCase()).length;
-        if (uppercaseCount >= max(2, tokens.length ~/ 2) && ln.length > 8) {
-          return false;
-        }
+        if (uppercaseCount >= max(2, tokens.length ~/ 2)) return false;
       }
       
       return true;
@@ -165,81 +153,26 @@ class SummaryGenerator {
 
     text = lines.join(' ');
 
-    // Step 10: Remove immediate duplicate adjacent words (OCR errors)
+    // Step 9: Remove duplicate words
     text = text.replaceAllMapped(
       RegExp(r'\b([A-Za-z]{3,})\s+\1\b', caseSensitive: false),
       (match) => match.group(1)!,
     );
 
-    // Step 11: Remove near-duplicates
-    text = text.replaceAllMapped(
-      RegExp(r'\b([A-Za-z]{4,})\s+([A-Za-z]{4,})\b'),
-      (match) {
-        final word1 = match.group(1)!;
-        final word2 = match.group(2)!;
-        if (_isNearDuplicate(word1, word2)) {
-          return word1;
-        }
-        return match.group(0)!;
-      },
-    );
-
-    // Step 12: Collapse repeated sequences
-    text = text.replaceAllMapped(
-      RegExp(r'\b([A-Za-z]{2,})(?:\s+\1){2,}\b', caseSensitive: false),
-      (match) => match.group(1)!,
-    );
-
-    // Step 13: Final whitespace normalization
+    // Step 10: Collapse whitespace
     text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
     
     return text;
   }
 
-  // Helper: Check if two words are near-duplicates
-  static bool _isNearDuplicate(String a, String b) {
-    final aLower = a.toLowerCase();
-    final bLower = b.toLowerCase();
-    
-    if (aLower == bLower) return true;
-    if ((aLower.length - bLower.length).abs() > 1) return false;
-    
-    int mismatches = 0;
-    int i = 0, j = 0;
-    
-    while (i < aLower.length && j < bLower.length) {
-      if (aLower[i] == bLower[j]) {
-        i++;
-        j++;
-      } else {
-        mismatches++;
-        if (mismatches > 1) return false;
-        
-        if (aLower.length > bLower.length) {
-          i++;
-        } else if (bLower.length > aLower.length) {
-          j++;
-        } else {
-          i++;
-          j++;
-        }
-      }
-    }
-    
-    mismatches += (aLower.length - i) + (bLower.length - j);
-    return mismatches <= 1;
-  }
-
-  // Extract top keywords
-  static List<String> extractKeywords(String text, {int topK = 12, int minWordLen = 5}) {
+  // ENHANCED: Extract keywords with better scoring
+  static List<String> extractKeywords(String text, {int topK = 15, int minWordLen = 5}) {
     final textLower = text.toLowerCase();
     final stopwords = {
       'the', 'and', 'for', 'with', 'from', 'this', 'that', 'which', 'are', 
       'was', 'were', 'have', 'has', 'had', 'their', 'there', 'they', 'these',
       'those', 'been', 'also', 'such', 'but', 'not', 'can', 'will', 'may',
-      'you', 'your', 'into', 'about', 'between', 'during', 'each', 'per',
-      'include', 'including', 'other', 'use', 'uses', 'used', 'using',
-      'some', 'many', 'most', 'more', 'much', 'one', 'two', 'three'
+      'you', 'your', 'into', 'about', 'between', 'during', 'each', 'per'
     };
 
     final words = RegExp(r'\b[a-z]{' + minWordLen.toString() + r',}\b')
@@ -247,169 +180,139 @@ class SummaryGenerator {
         .map((m) => m.group(0)!)
         .where((w) => !stopwords.contains(w) && !RegExp(r'^\d+$').hasMatch(w));
 
+    // TF-IDF style scoring
     final freq = <String, int>{};
-    for (final word in words) {
-      freq[word] = (freq[word] ?? 0) + 1;
+    final docFreq = <String, Set<int>>{};
+    final sentences = text.split(RegExp(r'[.!?]'));
+    
+    for (int i = 0; i < sentences.length; i++) {
+      final sentWords = sentences[i].toLowerCase().split(RegExp(r'\s+'));
+      for (final word in sentWords) {
+        if (word.length >= minWordLen && !stopwords.contains(word)) {
+          freq[word] = (freq[word] ?? 0) + 1;
+          docFreq.putIfAbsent(word, () => {}).add(i);
+        }
+      }
     }
 
-    final sorted = freq.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-    return sorted.take(topK).map((e) => e.key).toList();
+    // Score = freq * log(total_sentences / doc_freq)
+    final scored = freq.entries.map((e) {
+      final tf = e.value;
+      final df = docFreq[e.key]!.length;
+      final idf = log(sentences.length / df);
+      return MapEntry(e.key, tf * idf);
+    }).toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return scored.take(topK).map((e) => e.key).toList();
   }
 
-  // Score sentence
-  static int scoreSentence(String sentence) {
+  // ENHANCED: Better sentence scoring
+  static int scoreSentence(String sentence, List<String> keywords) {
     final cleaned = sentence.replaceAll(RegExp(r'[^A-Za-z0-9\s]'), '').toLowerCase();
     final words = cleaned.split(RegExp(r'\s+'));
     if (words.isEmpty) return 0;
 
     int score = words.length;
 
-    final keywords = [
-      'important', 'conclusion', 'therefore', 'however', 'because', 'result',
-      'results', 'study', 'shows', 'found', 'evidence', 'purpose', 'objective',
-      'method', 'analysis', 'gravitation', 'force', 'mass', 'acceleration',
-      'velocity', 'motion', 'energy', 'law', 'principle'
-    ];
-
+    // Keyword presence (highest weight)
     for (final keyword in keywords) {
       if (cleaned.contains(keyword)) {
-        score += 6;
+        score += 10;
       }
     }
 
-    if (RegExp(r'\d').hasMatch(sentence)) {
-      score += 3;
+    // Important terms
+    final importantTerms = [
+      'important', 'conclusion', 'therefore', 'however', 'because', 'result',
+      'shows', 'found', 'evidence', 'purpose', 'objective', 'method'
+    ];
+    for (final term in importantTerms) {
+      if (cleaned.contains(term)) score += 5;
     }
 
+    // Has numbers/data
+    if (RegExp(r'\d').hasMatch(sentence)) score += 4;
+
+    // Proper nouns
     final caps = RegExp(r'\b[A-Z][a-z]{2,}\b').allMatches(sentence).length;
-    score += caps;
+    score += caps * 2;
 
     return score;
   }
 
-  // Generate summary
+  // ENHANCED: Generate summary with better algorithm
   static Future<String> generateSummary(
     String text, {
-    int targetChars = 2600,
-    int targetLines = 18,
+    int targetChars = 2800,
+    int targetLines = 20,
   }) async {
     text = cleanText(text);
     if (text.isEmpty) {
       return 'No extractable text found in this PDF.';
     }
 
-    // Split into paragraphs
-    final paras = text.split(RegExp(r'\n{2,}'))
-        .map((p) => p.trim())
-        .where((p) => p.split(RegExp(r'\s+')).length >= 8)
-        .toList();
-
-    if (paras.isEmpty) {
-      final sents = text.split(RegExp(r'(?<=[.!?])\s+'))
-          .where((s) => s.split(RegExp(r'\s+')).length >= 6)
-          .toList();
-      final snippet = sents.take(targetLines).join(' ');
-      return snippet.substring(0, min(targetChars, snippet.length));
-    }
-
-    // Extract keywords
-    final keywords = extractKeywords(paras.join(' '), topK: 12);
+    // Extract keywords first
+    final keywords = extractKeywords(text, topK: 15);
     if (keywords.isEmpty) {
       return text.substring(0, min(targetChars, text.length));
     }
 
-    print('📊 Keywords extracted: ${keywords.take(5).join(", ")}...');
+    print('📊 Top keywords: ${keywords.take(8).join(", ")}');
 
-    // Assign paragraphs to keywords
-    final clusters = <String, List<String>>{};
-    for (final kw in keywords) {
-      clusters[kw] = [];
-    }
-    clusters['other'] = [];
+    // Split into sentences
+    final sentences = text.split(RegExp(r'(?<=[.!?])\s+'))
+        .where((s) => s.split(RegExp(r'\s+')).length >= 8)
+        .toList();
 
-    for (final para in paras) {
-      final paraLower = para.toLowerCase();
-      String? bestKw;
-      int bestScore = 0;
-
-      for (final kw in keywords) {
-        try {
-          final escapedKw = RegExp.escape(kw);
-          final count = RegExp(r'\b' + escapedKw + r'\b').allMatches(paraLower).length;
-          if (count > bestScore) {
-            bestScore = count;
-            bestKw = kw;
-          }
-        } catch (e) {
-          print('⚠️ Regex error for keyword "$kw": $e');
-          continue;
-        }
-      }
-
-      if (bestKw != null && clusters.containsKey(bestKw)) {
-        clusters[bestKw]!.add(para);
-      } else if (clusters.containsKey('other')) {
-        clusters['other']!.add(para);
-      }
+    if (sentences.isEmpty) {
+      return text.substring(0, min(targetChars, text.length));
     }
 
-    // Extract top sentences
+    // Score and rank sentences
+    final scoredSentences = sentences.map((s) {
+      return MapEntry(scoreSentence(s, keywords), s);
+    }).toList()
+      ..sort((a, b) => b.key.compareTo(a.key));
+
+    // Select top sentences
     final selectedSents = <String>[];
     final seen = <String>{};
-
-    for (final kw in keywords) {
-      final paraList = clusters[kw];
-      if (paraList == null || paraList.isEmpty) continue;
+    
+    for (final entry in scoredSentences) {
+      final sentKey = entry.value.toLowerCase().substring(0, min(50, entry.value.length));
+      if (seen.contains(sentKey)) continue;
       
-      for (final para in paraList) {
-        final sents = para.split(RegExp(r'(?<=[.!?])\s+'))
-            .where((s) => s.split(RegExp(r'\s+')).length >= 6)
-            .toList();
-
-        if (sents.isEmpty) continue;
-
-        final scored = sents.map((s) => MapEntry(scoreSentence(s), s)).toList()
-          ..sort((a, b) => b.key.compareTo(a.key));
-
-        for (final entry in scored.take(2)) {
-          final key = entry.value.toLowerCase();
-          if (seen.contains(key)) continue;
-          selectedSents.add(entry.value);
-          seen.add(key);
-          if (selectedSents.length >= targetLines) break;
-        }
-        if (selectedSents.length >= targetLines) break;
-      }
+      selectedSents.add(entry.value);
+      seen.add(sentKey);
+      
       if (selectedSents.length >= targetLines) break;
     }
 
     // Compose summary
     String summary = selectedSents.join(' ');
+    
+    // Trim to target length
     if (summary.length > targetChars) {
       summary = summary.substring(0, targetChars);
       final lastPeriod = summary.lastIndexOf('.');
-      if (lastPeriod > 0) {
+      if (lastPeriod > targetChars * 0.7) {
         summary = summary.substring(0, lastPeriod + 1);
       }
     }
 
-    // Ensure ends with sentence
+    // Ensure ends with punctuation
     if (!RegExp(r'[.!?]$').hasMatch(summary.trim())) {
       final match = RegExp(r'([.!?])').allMatches(summary).lastOrNull;
       if (match != null) {
-        final idx = match.start;
-        summary = summary.substring(0, idx + 1);
+        summary = summary.substring(0, match.start + 1);
       }
     }
 
-    final lines = summary.split(RegExp(r'(?<=[.!?])\s+'))
-        .where((ln) => ln.split(RegExp(r'\s+')).length >= 4)
-        .take(targetLines);
-
-    return lines.join('\n').trim();
+    return summary.trim();
   }
 
-  // Generate MCQ quiz
+  // ENHANCED: Generate quiz with better quality
   static Future<List<Map<String, dynamic>>> generateQuiz(
     String summary, {
     int numQuestions = 7,
@@ -417,13 +320,13 @@ class SummaryGenerator {
     if (summary.isEmpty) return [];
 
     final sentences = summary.split(RegExp(r'(?<=[.!?])\s+'))
-        .where((s) => s.trim().split(RegExp(r'\s+')).length >= 6)
+        .where((s) => s.trim().split(RegExp(r'\s+')).length >= 8)
         .toList();
 
     final candidates = _findCandidatePhrases(summary);
     if (candidates.isEmpty) return [];
 
-    print('📝 Candidate phrases found: ${candidates.length}');
+    print('📝 Found ${candidates.length} candidate phrases for quiz');
 
     final mcqs = <Map<String, dynamic>>[];
     final usedAnswers = <String>{};
@@ -443,7 +346,6 @@ class SummaryGenerator {
             break;
           }
         } catch (e) {
-          print('⚠️ Regex error for candidate "$cand": $e');
           continue;
         }
       }
@@ -454,32 +356,24 @@ class SummaryGenerator {
         chosen = words.reduce((a, b) => a.length > b.length ? a : b);
       }
 
-      // FIXED: Add null check before using chosen
       if (chosen == null) continue;
 
       try {
         final question = sent.replaceFirst(RegExp(RegExp.escape(chosen), caseSensitive: false), '_____');
 
+        // Generate better distractors
         final distractors = <String>[];
-        
-        // FIXED: Safe null handling for chosen.toLowerCase()
-        final pool = candidates.where((c) {
-          final chosenLower = chosen!.toLowerCase();
-          final cLower = c.toLowerCase();
-          return cLower != chosenLower;
-        }).toList();
-        
+        final pool = candidates.where((c) => c.toLowerCase() != chosen!.toLowerCase()).toList();
         pool.shuffle();
         
         for (final p in pool.take(3)) {
           distractors.add(p);
         }
 
+        // Fill remaining with mutations
         while (distractors.length < 3) {
           final mutated = _mutateWord(chosen);
-          final mutatedLower = mutated.toLowerCase();
-          final chosenLower = chosen.toLowerCase();
-          if (mutatedLower != chosenLower && !distractors.contains(mutated)) {
+          if (mutated.toLowerCase() != chosen.toLowerCase() && !distractors.contains(mutated)) {
             distractors.add(mutated);
           }
         }
@@ -488,7 +382,7 @@ class SummaryGenerator {
         options.shuffle();
 
         final labeled = options.asMap().entries.map((e) => {
-          'label': String.fromCharCode(65 + e.key), // A, B, C, D
+          'label': String.fromCharCode(65 + e.key),
           'text': e.value,
         }).toList();
 
@@ -496,18 +390,17 @@ class SummaryGenerator {
           (item) => item['text'] == chosen,
           orElse: () => labeled.last,
         );
-        final correctLabel = correctOption['label'] as String;
 
         mcqs.add({
           'question': question.trim(),
           'options': labeled,
-          'answer_label': correctLabel,
+          'answer_label': correctOption['label'],
           'answer_text': chosen,
         });
 
         usedAnswers.add(chosen.toLowerCase());
       } catch (e) {
-        print('⚠️ Error creating quiz for sentence: $e');
+        print('⚠️ Error creating quiz question: $e');
         continue;
       }
     }
@@ -516,6 +409,7 @@ class SummaryGenerator {
     return mcqs;
   }
 
+  // Helper methods - UNCHANGED
   static List<String> _findCandidatePhrases(String text, {int minWordLen = 5}) {
     try {
       final named = RegExp(r'\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2})\b')
@@ -536,7 +430,7 @@ class SummaryGenerator {
       final stops = {'therefore', 'however', 'because', 'throughout', 'between', 'including'};
       return candidates.where((c) => !stops.contains(c.toLowerCase())).toList();
     } catch (e) {
-      print('⚠️ Error finding candidate phrases: $e');
+      print('⚠️ Error finding candidates: $e');
       return [];
     }
   }
@@ -549,9 +443,9 @@ class SummaryGenerator {
     if (word.contains(' ')) {
       final parts = word.split(' ');
       final i = random.nextInt(parts.length);
-      parts[i] = parts[i].substring(0, parts[i].length - 1) + ['a', 'e', 'i', 'o', 'u'][random.nextInt(5)];
+      parts[i] = parts[i].substring(0, parts[i].length - 1) + ['a', 'e', 'i'][random.nextInt(3)];
       return parts.join(' ');
     }
-    return word.substring(0, word.length - 1) + ['a', 'e', 'i', 'o', 'u'][random.nextInt(5)];
+    return word.substring(0, word.length - 1) + ['a', 'e', 'i', 'o'][random.nextInt(4)];
   }
 }
