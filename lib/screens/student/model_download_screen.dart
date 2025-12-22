@@ -566,7 +566,7 @@ class _ModelDownloadScreenState extends State<ModelDownloadScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Qwen 2.5 AI Model',
+                                'AI Model',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,

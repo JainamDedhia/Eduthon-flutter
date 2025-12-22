@@ -983,7 +983,7 @@ Widget _buildLibraryTab() {
             _buildBigAIButton(
               icon: Icons.smart_toy,
               title: 'Download AI Model',
-              subtitle: 'Better summaries (678MB)',
+              subtitle: 'Better summaries ()',
               color: Color(0xFFFF9800),
               onTap: () => Navigator.pushNamed(context, '/student/model-download'),
             ),
