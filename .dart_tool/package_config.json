@@ -80,12 +80,6 @@
       "languageVersion": "2.18"
     },
     {
-      "name": "convert",
-      "rootUri": "file:///C:/Users/nirup/AppData/Local/Pub/Cache/hosted/pub.dev/convert-3.1.2",
-      "packageUri": "lib/",
-      "languageVersion": "3.4"
-    },
-    {
       "name": "cross_file",
       "rootUri": "file:///C:/Users/nirup/AppData/Local/Pub/Cache/hosted/pub.dev/cross_file-0.3.5+1",
       "packageUri": "lib/",
@@ -252,12 +246,6 @@
       "rootUri": "file:///C:/Users/nirup/AppData/Local/Pub/Cache/hosted/pub.dev/http_parser-4.1.2",
       "packageUri": "lib/",
       "languageVersion": "3.4"
-    },
-    {
-      "name": "intl",
-      "rootUri": "file:///C:/Users/nirup/AppData/Local/Pub/Cache/hosted/pub.dev/intl-0.20.2",
-      "packageUri": "lib/",
-      "languageVersion": "3.3"
     },
     {
       "name": "json_annotation",
@@ -482,6 +470,12 @@
       "languageVersion": "2.12"
     },
     {
+      "name": "read_pdf_text",
+      "rootUri": "file:///C:/Users/nirup/AppData/Local/Pub/Cache/hosted/pub.dev/read_pdf_text-0.3.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "shared_preferences",
       "rootUri": "file:///C:/Users/nirup/AppData/Local/Pub/Cache/hosted/pub.dev/shared_preferences-2.5.4",
       "packageUri": "lib/",
@@ -570,18 +564,6 @@
       "rootUri": "file:///C:/Users/nirup/AppData/Local/Pub/Cache/hosted/pub.dev/string_scanner-1.4.1",
       "packageUri": "lib/",
       "languageVersion": "3.1"
-    },
-    {
-      "name": "syncfusion_flutter_core",
-      "rootUri": "file:///C:/Users/nirup/AppData/Local/Pub/Cache/hosted/pub.dev/syncfusion_flutter_core-28.2.12",
-      "packageUri": "lib/",
-      "languageVersion": "3.4"
-    },
-    {
-      "name": "syncfusion_flutter_pdf",
-      "rootUri": "file:///C:/Users/nirup/AppData/Local/Pub/Cache/hosted/pub.dev/syncfusion_flutter_pdf-28.2.12",
-      "packageUri": "lib/",
-      "languageVersion": "3.4"
     },
     {
       "name": "term_glyph",

@@ -2,7 +2,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'package:read_pdf_text/read_pdf_text.dart';
 import 'package:archive/archive_io.dart';
 import 'subject_vocabulary.dart';
 import 'subject_tracker.dart';
@@ -21,98 +21,107 @@ class SummaryGenerator {
       }
 
       // Check if file is compressed (.gz)
-      List<int> pdfBytes;
+      String actualPath = pdfPath;
       if (pdfPath.endsWith('.gz')) {
         print('🗜️ Decompressing gzipped PDF...');
         final compressedBytes = await file.readAsBytes();
 
         try {
           final decoder = GZipDecoder();
-          pdfBytes = decoder.decodeBytes(compressedBytes);
+          final pdfBytes = decoder.decodeBytes(compressedBytes);
           print(
             '✅ Decompressed: ${compressedBytes.length} → ${pdfBytes.length} bytes',
           );
+
+          // Write decompressed PDF to temporary file
+          final tempDir = Directory.systemTemp;
+          final tempFile = File(
+            '${tempDir.path}/temp_pdf_${DateTime.now().millisecondsSinceEpoch}.pdf',
+          );
+          await tempFile.writeAsBytes(pdfBytes);
+          actualPath = tempFile.path;
+          print('📝 Temporary file created: $actualPath');
         } catch (decompressionError) {
           print(
             '⚠️ Decompression failed, trying as raw PDF: $decompressionError',
           );
-          pdfBytes = compressedBytes;
         }
-      } else {
-        pdfBytes = await file.readAsBytes();
       }
 
-      // Load PDF document
-      PdfDocument? document;
-      try {
-        document = PdfDocument(inputBytes: pdfBytes);
-        print('✅ PDF loaded: ${document.pages.count} pages');
-      } catch (e) {
-        print('❌ Failed to load PDF: $e');
-        throw Exception('Invalid PDF file or corrupted data');
-      }
-
+      // Extract text using read_pdf_text
       String extractedText = '';
-      int successfulPages = 0;
+      try {
+        print('🔍 Reading PDF text...');
+        extractedText = await ReadPdfText.getPDFtext(actualPath);
 
-      // Extract text from each page individually
-      for (int i = 0; i < document.pages.count; i++) {
-        try {
-          String pageText = PdfTextExtractor(
-            document,
-          ).extractText(startPageIndex: i, endPageIndex: i);
+        if (extractedText.trim().isEmpty) {
+          throw Exception(
+            'Could not extract any text from this PDF.\n\n'
+            'Possible reasons:\n'
+            '• PDF contains only images (scanned document)\n'
+            '• PDF is encrypted or password-protected\n'
+            '• PDF structure is corrupted',
+          );
+        }
 
-          // Fallback extraction method
-          if (pageText.trim().isEmpty) {
-            try {
-              final PdfTextExtractor extractor = PdfTextExtractor(document);
-              final result = extractor.extractText(startPageIndex: i);
-              if (result.isNotEmpty) {
-                pageText = result;
-              }
-            } catch (e) {
-              print('⚠️ Page ${i + 1}: Text line extraction failed');
-            }
+        // Handle any literal "\n" strings that might be in the extracted text
+        extractedText = extractedText.replaceAll('\\n', '\n');
+        extractedText = extractedText.replaceAll('\\r', '\r');
+
+        // Process text to preserve sentence structure
+        extractedText = _preserveSentenceStructure(extractedText);
+
+        // Fix split and merged words (handles "distracti on" → "distraction")
+        extractedText = TextWordJoiner.fixSplitWords(extractedText);
+
+        print('✅ Successfully extracted ${extractedText.length} characters');
+        return extractedText.trim();
+      } catch (e) {
+        print('❌ PDF text extraction error: $e');
+        throw Exception('Failed to extract text from PDF: $e');
+      } finally {
+        // Clean up temporary file if it was created
+        if (pdfPath.endsWith('.gz') && actualPath != pdfPath) {
+          try {
+            await File(actualPath).delete();
+            print('🧹 Temporary file deleted');
+          } catch (e) {
+            print('⚠️ Could not delete temporary file: $e');
           }
-
-          // Add page text if not empty
-          if (pageText.trim().isNotEmpty) {
-            extractedText += '${pageText.trim()}\n\n';
-            successfulPages++;
-            print('✅ Page ${i + 1}: Extracted ${pageText.length} characters');
-          } else {
-            print('⚠️ Page ${i + 1}: No text extracted (may be image-only)');
-          }
-        } catch (pageError) {
-          print('⚠️ Page ${i + 1}: Error - $pageError');
-          continue;
         }
       }
-
-      final totalPages = document.pages.count;
-      document.dispose();
-
-      // Check if any text was extracted
-      if (extractedText.trim().isEmpty) {
-        throw Exception(
-          'Could not extract any text from this PDF.\n\n'
-          'Possible reasons:\n'
-          '• PDF contains only images (scanned document)\n'
-          '• PDF is encrypted or password-protected\n'
-          '• PDF structure is corrupted\n\n'
-          'Pages checked: $totalPages\n'
-          'Text found: 0 characters',
-        );
-      }
-
-      print(
-        '✅ Successfully extracted ${extractedText.length} characters from $successfulPages/$totalPages pages',
-      );
-      return extractedText.trim();
     } catch (e) {
       print('❌ PDF extraction error: $e');
       rethrow;
     }
+  }
+
+  /// Preserve sentence structure during PDF text extraction
+  /// Handles line breaks, spaces, and sentence boundaries better than raw extraction
+  static String _preserveSentenceStructure(String text) {
+    String result = text;
+
+    // Fix line breaks that should be spaces (mid-sentence)
+    // If a line ends with a lowercase letter and next line starts with lowercase,
+    // they were split mid-sentence
+    result = result.replaceAllMapped(
+      RegExp(r'([a-z])\n([a-z])', multiLine: true),
+      (match) => '${match.group(1)} ${match.group(2)}',
+    );
+
+    // Preserve actual paragraph breaks (empty lines or lines ending with punctuation)
+    result = result.replaceAllMapped(
+      RegExp(r'([.!?])\n+', multiLine: true),
+      (match) => '${match.group(1)}\n\n',
+    );
+
+    // Clean up excessive newlines but keep paragraph structure
+    result = result.replaceAllMapped(
+      RegExp(r'\n{3,}', multiLine: true),
+      (match) => '\n\n',
+    );
+
+    return result;
   }
 
   // Universal "Glue" words for subject-agnostic splitting
@@ -653,6 +662,32 @@ class SummaryGenerator {
     text = text.replaceAll('\u00A0', ' ');
     text = text.replaceAll('\t', ' ');
 
+    // Phase 1.1: Remove special/control characters that aren't displayable
+    // This removes garbled characters from PDF extraction like emoji, control chars, etc.
+    text = text.replaceAll(
+      RegExp(r'[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F-\x9F]'),
+      '',
+    );
+
+    // Remove zero-width characters and other invisible Unicode
+    text = text.replaceAll(RegExp(r'[\u200B-\u200D\uFEFF]'), '');
+
+    // Replace other problematic Unicode with readable alternatives
+    text = text.replaceAll(RegExp(r'[\u2000-\u200F]'), ' '); // Various spaces
+
+    // Phase 1.1b: AGGRESSIVE - Remove all non-ASCII printable characters that cause rendering issues
+    // Keep only: letters (a-z, A-Z), digits (0-9), common punctuation, and basic whitespace
+    // This catches chemical subscripts, superscripts, emoji, and other Unicode junk
+    text = text.replaceAll(
+      RegExp(r'[^\x20-\x7E\n\r\t]'),
+      '', // Remove anything outside standard ASCII range
+    );
+
+    // Phase 1.2: Fix literal "\n" strings being shown instead of actual newlines
+    // If the PDF extractor returned literal backslash-n, convert to actual newlines
+    text = text.replaceAll('\\n', '\n');
+    text = text.replaceAll('\\r', '\r');
+
     // Phase 1.5: De-spacing logic for headers (e.g., "E X E R C I S E S" -> "EXERCISES")
     // This catches spaced-out uppercase headers common in PDF extractions
     text = text.replaceAllMapped(
@@ -790,8 +825,9 @@ class SummaryGenerator {
     text = TextWordJoiner.fixSplitWords(text);
 
     // Phase 7: Fix remaining merged words (generic patterns)
-    // Re-enabled with strict safety checks
-    text = _fixMergedWords(text);
+    // DISABLED: read_pdf_text extracts text cleanly without merged word issues
+    // This method was over-aggressive and split legitimate words like "distraction" -> "distracti on"
+    // text = _fixMergedWords(text);
 
     // Phase 8: Fix spacing after punctuation
     text = text.replaceAllMapped(
@@ -1566,8 +1602,9 @@ class SummaryGenerator {
 
     // Find candidate answers (concepts)
     final candidates = _findCandidatePhrases(textContent, subject: subject);
-    if (candidates.length < 4)
+    if (candidates.length < 4) {
       return []; // Need at least 1 answer + 3 distractors
+    }
 
     final mcqs = <Map<String, dynamic>>[];
     final usedAnswers = <String>{};
