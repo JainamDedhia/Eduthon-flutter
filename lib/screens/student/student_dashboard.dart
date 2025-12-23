@@ -70,122 +70,147 @@ final GlobalKey _libraryTabKey = GlobalKey(); // Add this line
   }
 
   void _showOnboarding() {
-    final targets = <TargetFocus>[];
-    
-    // Target 1: Classes Tab (current screen) - Only target first class card
-    targets.add(
-      TargetFocus(
-        identify: "classes_tab",
-        keyTarget: _firstClassCardKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.bottom,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.class_,
-                title: '📚 Your Classes',
-                description: 'See all classes you joined here.\nTap any class to view materials.',
-                onNext: () => controller.next(),
-                onSkip: () => _skipOnboarding(controller),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    // Target 2: Download Button - Only target first download button
-    targets.add(
-      TargetFocus(
-        identify: "download_button",
-        keyTarget: _firstDownloadButtonKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.download,
-                title: '⬇️ Download Files',
-                description: 'Download PDFs to study offline.\nFiles work without internet!',
-                onNext: () => controller.next(),
-                onSkip: () => _skipOnboarding(controller),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    // Target 3: AI Tools Tab
-    targets.add(
-      TargetFocus(
-        identify: "ai_tools",
-        keyTarget: _aiToolsTabKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.auto_awesome,
-                title: '🤖 AI Tools',
-                description: 'Generate summaries & quizzes from PDFs.\nTap here to access AI features!',
-                onNext: () => controller.next(),
-                onSkip: () => _skipOnboarding(controller),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    // Target 4: Settings Tab
-    targets.add(
-      TargetFocus(
-        identify: "settings",
-        keyTarget: _settingsTabKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.top,
-            builder: (context, controller) {
-              return _buildOnboardingContent(
-                icon: Icons.settings,
-                title: '⚙️ Settings',
-                description: 'View your profile & logout here.\nCheck storage savings!',
-                onNext: () => _finishOnboarding(controller),
-                onSkip: () => _skipOnboarding(controller),
-                isLast: true,
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    
-    _tutorialCoachMark = TutorialCoachMark(
-      targets: targets,
-      colorShadow: Colors.black,
-      paddingFocus: 10,
-      opacityShadow: 0.8,
-      onFinish: () {
-        OnboardingService.markStudentDashboardCompleted();
-      },
-      onSkip: () {
-        OnboardingService.markStudentDashboardCompleted();
-        return true;
-      },
-    );
-    
-    _tutorialCoachMark?.show(context: context);
-  }
-
+  final targets = <TargetFocus>[];
+  
+  // Target 1: Classes Card - Show tooltip ABOVE the card
+  targets.add(
+    TargetFocus(
+      identify: "classes_card",
+      keyTarget: _firstClassCardKey,
+      alignSkip: Alignment.topRight,
+      enableOverlayTab: true,
+      shape: ShapeLightFocus.RRect,
+      radius: 12,
+      contents: [
+        TargetContent(
+          align: ContentAlign.top,
+          builder: (context, controller) {
+            return _buildOnboardingContent(
+              icon: Icons.class_,
+              title: '📚 Your Classes',
+              description: 'Tap any class to view materials & download PDFs.',
+              onNext: () => controller.next(),
+              onSkip: () => _skipOnboarding(controller),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+  
+  // Target 2: Download Button - Only target first download button
+  targets.add(
+    TargetFocus(
+      identify: "download_button",
+      keyTarget: _firstDownloadButtonKey,
+      alignSkip: Alignment.topRight,
+      enableOverlayTab: true,
+      contents: [
+        TargetContent(
+          align: ContentAlign.top,
+          builder: (context, controller) {
+            return _buildOnboardingContent(
+              icon: Icons.download,
+              title: '⬇️ Download Files',
+              description: 'Download PDFs to study offline.\nFiles work without internet!',
+              onNext: () => controller.next(),
+              onSkip: () => _skipOnboarding(controller),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+  
+  // Target 3: Library Tab
+  targets.add(
+    TargetFocus(
+      identify: "library_tab",  // Changed from "library" to match your error
+      keyTarget: _libraryTabKey,
+      alignSkip: Alignment.topRight,
+      enableOverlayTab: true,
+      contents: [
+        TargetContent(
+          align: ContentAlign.top,
+          builder: (context, controller) {
+            return _buildOnboardingContent(
+              icon: Icons.library_books,
+              title: '📖 Library',
+              description: 'Access all your downloaded files in one place.\nOrganize your study materials!',
+              onNext: () => controller.next(),
+              onSkip: () => _skipOnboarding(controller),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+  
+  // Target 4: AI Tools Tab
+  targets.add(
+    TargetFocus(
+      identify: "ai_tools",
+      keyTarget: _aiToolsTabKey,
+      alignSkip: Alignment.topRight,
+      enableOverlayTab: true,
+      contents: [
+        TargetContent(
+          align: ContentAlign.top,
+          builder: (context, controller) {
+            return _buildOnboardingContent(
+              icon: Icons.auto_awesome,
+              title: '🤖 AI Tools',
+              description: 'Generate summaries & quizzes from PDFs.\nTap here to access AI features!',
+              onNext: () => controller.next(),
+              onSkip: () => _skipOnboarding(controller),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+  
+  // Target 5: Settings Tab
+  targets.add(
+    TargetFocus(
+      identify: "settings",
+      keyTarget: _settingsTabKey,
+      alignSkip: Alignment.topRight,
+      enableOverlayTab: true,
+      contents: [
+        TargetContent(
+          align: ContentAlign.top,
+          builder: (context, controller) {
+            return _buildOnboardingContent(
+              icon: Icons.settings,
+              title: '⚙️ Settings',
+              description: 'View your profile & logout here.\nCheck storage savings!',
+              onNext: () => _finishOnboarding(controller),
+              onSkip: () => _skipOnboarding(controller),
+              isLast: true,
+            );
+          },
+        ),
+      ],
+    ),
+  );
+  
+  _tutorialCoachMark = TutorialCoachMark(
+    targets: targets,
+    colorShadow: Colors.black,
+    paddingFocus: 10,
+    opacityShadow: 0.8,
+    onFinish: () {
+      OnboardingService.markStudentDashboardCompleted();
+    },
+    onSkip: () {
+      OnboardingService.markStudentDashboardCompleted();
+      return true;
+    },
+  );
+  
+  _tutorialCoachMark?.show(context: context);
+}
   Widget _buildOnboardingContent({
     required IconData icon,
     required String title,
@@ -1207,7 +1232,7 @@ Widget _buildLibraryTab() {
           label: 'Classes',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.library_books, size: 28),
+          icon: Icon(Icons.library_books, size: 28, key: _libraryTabKey), // Add key here
           label: 'Library',
         ),
         BottomNavigationBarItem(
