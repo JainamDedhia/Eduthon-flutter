@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../config/firebase_config.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/student_progress_widget.dart';
-import '../../widgets/student_progress_card.dart';
 
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({super.key});

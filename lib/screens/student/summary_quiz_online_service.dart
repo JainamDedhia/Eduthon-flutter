@@ -23,10 +23,11 @@ class SummaryQuizOnlineService {
       final selectedModel = await showDialog<String>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => ModelSelectionDialog(
-          title: '🤖 Choose AI Model',
-          description: 'Select model for generating summary & quiz',
-        ),
+        builder:
+            (context) => ModelSelectionDialog(
+              title: '🤖 Choose AI Model',
+              description: 'Select model for generating summary & quiz',
+            ),
       );
 
       if (selectedModel == null) {
@@ -38,33 +39,41 @@ class SummaryQuizOnlineService {
 
       setProcessingFile(file.name);
       setProgress(0.0);
+      String summary;
 
       // Step 1: Extract text from PDF
       setProgress(0.15);
-      final text = await SummaryGenerator.extractTextFromPDF(file.localPath);
-      
-      if (text.isEmpty) {
+      final rawText = await SummaryGenerator.extractTextFromPDF(file.localPath);
+
+      if (rawText.isEmpty) {
         throw Exception('Could not extract text from PDF');
       }
 
-      print('📄 [SummaryQuiz] Extracted ${text.length} characters');
+      // Clean the text dynamically using our new WordJoiner and other rules
+      print('🧹 Cleaning text...');
+      final text = SummaryGenerator.cleanText(rawText);
+
+      print(
+        '📄 [SummaryQuiz] Cleaned text: ${text.length} characters (Original: ${rawText.length})',
+      );
 
       // Step 2: Generate Summary using Server API
       setProgress(0.3);
       print('🔄 [SummaryQuiz] Calling server API for summary...');
-      
-      final summary = await ServerAPIService.generateSummary(
+
+      final rawSummary = await ServerAPIService.generateSummary(
         text: text,
         model: selectedModel,
         maxLength: 500,
       );
+      summary = SummaryGenerator.cleanText(rawSummary);
 
       print('✅ [SummaryQuiz] Summary received: ${summary.length} chars');
 
       // Step 3: Generate Quiz using Server API
       setProgress(0.6);
       print('🔄 [SummaryQuiz] Calling server API for quiz...');
-      
+
       final quiz = await ServerAPIService.generateQuiz(
         text: summary, // Use summary as context for quiz
         model: selectedModel,
@@ -76,7 +85,7 @@ class SummaryQuizOnlineService {
       // Step 4: Generate Mind Map (use local generation)
       setProgress(0.85);
       print('🧠 [SummaryQuiz] Generating mind map locally...');
-      
+
       final mindMap = await MindMapGenerator.generateMindMap(
         summary: summary,
         quiz: quiz,
@@ -87,7 +96,7 @@ class SummaryQuizOnlineService {
 
       // Step 5: Save to local database
       setProgress(0.95);
-      
+
       await OfflineDB.saveSummaryAndQuiz(
         file.classCode,
         file.name,
@@ -95,11 +104,7 @@ class SummaryQuizOnlineService {
         quiz,
       );
 
-      await OfflineDB.saveMindMap(
-        file.classCode,
-        file.name,
-        mindMap.toJson(),
-      );
+      await OfflineDB.saveMindMap(file.classCode, file.name, mindMap.toJson());
 
       setProgress(1.0);
 
@@ -129,47 +134,48 @@ class SummaryQuizOnlineService {
     } catch (e) {
       print('❌ [SummaryQuiz] Server generation failed: $e');
       onError(e as Exception);
-      
+
       if (context.mounted) {
         // Show error with fallback option
         final retry = await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: Row(
-              children: [
-                Icon(Icons.error, color: Colors.orange),
-                SizedBox(width: 8),
-                Text('Server Error'),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Failed to generate using server:'),
-                SizedBox(height: 8),
-                Text(
-                  e.toString(),
-                  style: TextStyle(fontSize: 12, color: Colors.red),
+          builder:
+              (context) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.error, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Text('Server Error'),
+                  ],
                 ),
-                SizedBox(height: 16),
-                Text('Would you like to use offline mode instead?'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Color(0xFF4A90E2),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Failed to generate using server:'),
+                    SizedBox(height: 8),
+                    Text(
+                      e.toString(),
+                      style: TextStyle(fontSize: 12, color: Colors.red),
+                    ),
+                    SizedBox(height: 16),
+                    Text('Would you like to use offline mode instead?'),
+                  ],
                 ),
-                child: Text('Use Offline Mode'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text('Cancel'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFF4A90E2),
+                    ),
+                    child: Text('Use Offline Mode'),
+                  ),
+                ],
               ),
-            ],
-          ),
         );
 
         if (retry == true) {

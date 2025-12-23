@@ -32,7 +32,7 @@ class _ModelSelectionDialogState extends State<ModelSelectionDialog> {
   Future<void> _checkServerStatus() async {
     // Check internet connectivity
     final connectivityResult = await Connectivity().checkConnectivity();
-    final isOnline = connectivityResult != ConnectivityResult.none;
+    final isOnline = !connectivityResult.contains(ConnectivityResult.none);
 
     if (!isOnline) {
       setState(() {
@@ -328,7 +328,7 @@ class _ModelSelectionDialogState extends State<ModelSelectionDialog> {
       child: Container(
         padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.white,
+          color: isSelected ? color.withValues(alpha: 0.1) : Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? color : Colors.grey[300]!,
@@ -337,7 +337,7 @@ class _ModelSelectionDialogState extends State<ModelSelectionDialog> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: color.withOpacity(0.3),
+                    color: color.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: Offset(0, 4),
                   ),
@@ -352,7 +352,7 @@ class _ModelSelectionDialogState extends State<ModelSelectionDialog> {
                 Container(
                   padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.2),
+                    color: color.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: color, size: 28),

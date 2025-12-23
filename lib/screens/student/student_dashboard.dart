@@ -11,8 +11,6 @@ import 'package:claudetest/services/quiz_sync_service.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import '../../services/onboarding_service.dart';
 import 'package:claudetest/widgets/streak_widget.dart';
-import 'package:claudetest/services/streak_service.dart';
-import 'package:claudetest/screens/student/library_screen.dart';
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -35,8 +33,6 @@ class _StudentDashboardState extends State<StudentDashboard> {
   final GlobalKey _firstDownloadButtonKey = GlobalKey(); // Only for first download button
   final GlobalKey _aiToolsTabKey = GlobalKey();
   final GlobalKey _settingsTabKey = GlobalKey();
-  // In the _StudentDashboardState class, add this line after other GlobalKeys:
-final GlobalKey _libraryTabKey = GlobalKey(); // Add this line
   
   TutorialCoachMark? _tutorialCoachMark;
 
@@ -628,28 +624,16 @@ final GlobalKey _libraryTabKey = GlobalKey(); // Add this line
   }
 
   @override
-  @override
-Widget build(BuildContext context) {
-  final authProvider = Provider.of<AuthProvider>(context);
+  Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
 
-  if (authProvider.user == null || authProvider.userRole != 'student') {
+    if (authProvider.user == null || authProvider.userRole != 'student') {
+      return Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
-  }
-
-  // WRAP THE ENTIRE SCAFFOLD WITH WillPopScope
-  return WillPopScope(
-    onWillPop: () async {
-      // Handle Android back button
-      if (_currentTab != 0) {
-        // If not on Classes tab, switch to Classes tab
-        setState(() => _currentTab = 0);
-        return false; // Don't exit app
-      }
-      return true; // Exit app (only on Classes tab)
-    },
-    child: Scaffold(
       backgroundColor: Color(0xFFF5F5F5),
       body: _buildBody(),
       bottomNavigationBar: _buildBottomNav(),
@@ -667,31 +651,21 @@ Widget build(BuildContext context) {
               backgroundColor: Color(0xFF66BB6A),
             )
           : null,
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildBody() {
-  switch (_currentTab) {
-    case 0:
-      return _buildClassesTab();
-    case 1:
-      return _buildLibraryTab(); // NEW TAB
-    case 2:
-      return _buildAIToolsTab(); // Changed from index 1 to 2
-    case 3:
-      return _buildSettingsTab(); // Changed from index 2 to 3
-    default:
-      return _buildClassesTab();
+    switch (_currentTab) {
+      case 0:
+        return _buildClassesTab();
+      case 1:
+        return _buildAIToolsTab();
+      case 2:
+        return _buildSettingsTab();
+      default:
+        return _buildClassesTab();
+    }
   }
-}
-
-// Replace the entire _buildLibraryTab() method with this:
-
-Widget _buildLibraryTab() {
-  // Directly return the full LibraryScreen
-  return LibraryScreen();
-}
 
   // 🏠 TAB 1: MY CLASSES
   Widget _buildClassesTab() {
@@ -983,7 +957,7 @@ Widget _buildLibraryTab() {
             _buildBigAIButton(
               icon: Icons.smart_toy,
               title: 'Download AI Model',
-              subtitle: 'Better summaries ()',
+              subtitle: 'Better summaries (678MB)',
               color: Color(0xFFFF9800),
               onTap: () => Navigator.pushNamed(context, '/student/model-download'),
             ),
@@ -1178,48 +1152,39 @@ Widget _buildLibraryTab() {
 
   // Bottom Navigation
   Widget _buildBottomNav() {
-  return Container(
-    decoration: BoxDecoration(
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black12,
-          blurRadius: 8,
-          offset: Offset(0, -2),
-        ),
-      ],
-    ),
-    child: BottomNavigationBar(
-      currentIndex: _currentTab,
-      onTap: (index) {
-        // Don't do anything if tapping the same tab
-        if (_currentTab != index) {
-          setState(() => _currentTab = index);
-        }
-      },
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: Color(0xFF4A90E2),
-      unselectedItemColor: Colors.grey,
-      selectedFontSize: 12,
-      unselectedFontSize: 12,
-      items: [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home, size: 28),
-          label: 'Classes',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.library_books, size: 28),
-          label: 'Library',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.auto_awesome, size: 28, key: _aiToolsTabKey),
-          label: 'AI Tools',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.settings, size: 28, key: _settingsTabKey),
-          label: 'Settings',
-        ),
-      ],
-    ),
-  );
-}
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, -2),
+          ),
+        ],
+      ),
+      child: BottomNavigationBar(
+        currentIndex: _currentTab,
+        onTap: (index) => setState(() => _currentTab = index),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Color(0xFF4A90E2),
+        unselectedItemColor: Colors.grey,
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home, size: 28),
+            label: 'Classes',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.auto_awesome, size: 28, key: _aiToolsTabKey),
+            label: 'AI Tools',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings, size: 28, key: _settingsTabKey),
+            label: 'Settings',
+          ),
+        ],
+      ),
+    );
+  }
 }

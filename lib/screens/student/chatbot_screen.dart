@@ -140,7 +140,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           
         } else {
           // No document available for RAG fallback
-          _addErrorMessage(_getUserFriendlyError(onlineError.toString()) + "\n\n💡 Tip: This chat works best with a PDF document loaded.");
+          _addErrorMessage("${_getUserFriendlyError(onlineError.toString())}\n\n💡 Tip: This chat works best with a PDF document loaded.");
         }
       }
 

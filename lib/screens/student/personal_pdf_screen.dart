@@ -275,9 +275,9 @@ class _PersonalPdfScreenState extends State<PersonalPdfScreen> {
 
     try {
       // Delete file
-      final file_obj = File(file.localPath);
-      if (await file_obj.exists()) {
-        await file_obj.delete();
+      final fileObj = File(file.localPath);
+      if (await fileObj.exists()) {
+        await fileObj.delete();
       }
 
       // Delete from database

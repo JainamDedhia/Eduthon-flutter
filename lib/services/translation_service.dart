@@ -141,12 +141,12 @@ class TranslationService {
     
     for (final sentence in sentences) {
       if ((currentChunk + sentence).length <= 4500) { // Leave margin
-        currentChunk += sentence + ' ';
+        currentChunk += '$sentence ';
       } else {
         if (currentChunk.isNotEmpty) {
           chunks.add(currentChunk.trim());
         }
-        currentChunk = sentence + ' ';
+        currentChunk = '$sentence ';
       }
     }
     

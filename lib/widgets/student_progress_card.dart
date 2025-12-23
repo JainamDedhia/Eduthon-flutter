@@ -255,9 +255,9 @@ class _StudentProgressCardState extends State<StudentProgressCard>
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -553,7 +553,7 @@ class _StudentProgressCardState extends State<StudentProgressCard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4A90E2).withOpacity(0.1),
+                  color: const Color(0xFF4A90E2).withValues(alpha: 0.1),
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(7),
                   ),
@@ -687,7 +687,7 @@ class _StudentProgressCardState extends State<StudentProgressCard>
                               decoration: BoxDecoration(
                                 color: student.quizzesTaken > 0
                                     ? _getScoreColor(student.averageScore)
-                                        .withOpacity(0.15)
+                                        .withValues(alpha: 0.15)
                                     : Colors.grey.shade200,
                                 borderRadius: BorderRadius.circular(4),
                               ),

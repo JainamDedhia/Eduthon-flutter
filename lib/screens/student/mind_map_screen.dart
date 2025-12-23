@@ -164,7 +164,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
   }
 
   Widget _buildGrid() {
-    return Container(
+    return SizedBox(
       width: double.infinity,
       height: double.infinity,
       child: CustomPaint(
@@ -174,7 +174,7 @@ class _MindMapScreenState extends State<MindMapScreen> {
   }
 
   Widget _buildControlButton({required IconData icon, required VoidCallback onPressed}) {
-    return Container(
+    return SizedBox(
       width: 44,
       height: 44,
       child: Material(
