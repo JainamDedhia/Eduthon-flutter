@@ -21,6 +21,7 @@ class SummaryQuizOfflineService {
     double selectedGrade = 5.0; // Default Grade 5
 
     // Always ask for Grade Level preference
+    bool usedFallback = false;
     final double? grade = await showDialog<double>(
       context: context,
       barrierDismissible: false,
@@ -141,19 +142,62 @@ class SummaryQuizOfflineService {
         setProgress(0.4);
         print('🤖 [SummaryQuiz] Using local LLM model');
 
-        setProgress(0.4);
-        final rawSummary = await LLMSummaryService.generateSummaryWithLLM(
-          text: text,
-          language: selectedLanguage,
-        );
-        summary = SummaryGenerator.cleanText(rawSummary);
+        try {
+          setProgress(0.4);
+          final rawSummary = await LLMSummaryService.generateSummaryWithLLM(
+            text: text,
+            language: selectedLanguage,
+          );
+          summary = SummaryGenerator.cleanText(rawSummary);
 
-        setProgress(0.65);
-        quiz = await LLMSummaryService.generateQuizWithLLM(
-          summary: summary,
-          language: selectedLanguage,
-          numQuestions: 10,
-        );
+          setProgress(0.65);
+          quiz = await LLMSummaryService.generateQuizWithLLM(
+            summary: summary,
+            language: selectedLanguage,
+            numQuestions: 10,
+          );
+        } on Exception catch (llmError) {
+          // Handle LLM-specific errors
+          if (llmError.toString().contains('libllama.so') ||
+              llmError.toString().contains('Native library') ||
+              llmError.toString().contains('UnsupportedError')) {
+            print(
+              '⚠️ [SummaryQuiz] Native library unavailable, falling back to rule-based generation',
+            );
+            usedFallback = true;
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Local AI mode requires app rebuild. Using standard generation instead.',
+                  ),
+                  backgroundColor: Colors.orange,
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            }
+
+            // Fallback to rule-based generation
+            print(
+              '📝 [SummaryQuiz] Falling back to rule-based generation (Grade ${selectedGrade.round()})',
+            );
+            setProgress(0.4);
+            summary = await SummaryGenerator.generateSummary(
+              text,
+              gradeLevel: selectedGrade,
+            );
+
+            setProgress(0.65);
+            quiz = await SummaryGenerator.generateQuiz(
+              summary,
+              gradeLevel: selectedGrade,
+              numQuestions: 10,
+            );
+          } else {
+            // Re-throw other LLM errors
+            rethrow;
+          }
+        }
       } else {
         print(
           '📝 [SummaryQuiz] Using rule-based generation (Grade ${selectedGrade.round()})',
@@ -198,7 +242,8 @@ class SummaryQuizOfflineService {
       print('✅ Summary, Quiz, and Mind Map saved');
 
       if (context.mounted) {
-        final mode = modelAvailable ? 'Local AI Model' : 'Rule-Based';
+        final mode =
+            (modelAvailable && !usedFallback) ? 'Local AI Model' : 'Rule-Based';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✅ Generated with $mode!'),

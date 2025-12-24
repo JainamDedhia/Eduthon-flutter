@@ -89,26 +89,24 @@ class DownloadManager {
         final encoder = GZipEncoder();
         final compressedBytes = encoder.encode(bytes);
 
-        if (compressedBytes != null) {
-          // Write compressed file
-          final compressedFile = File(compressedPath);
-          await compressedFile.writeAsBytes(compressedBytes);
+        // Write compressed file
+        final compressedFile = File(compressedPath);
+        await compressedFile.writeAsBytes(compressedBytes);
 
-          compressedSize = compressedBytes.length;
+        compressedSize = compressedBytes.length;
 
-          final spaceSaved = originalSize - compressedSize;
-          final compressionRatio =
-              ((spaceSaved / originalSize) * 100).toStringAsFixed(1);
+        final spaceSaved = originalSize - compressedSize;
+        final compressionRatio =
+            ((spaceSaved / originalSize) * 100).toStringAsFixed(1);
 
-          print('📊 [downloadManager] Compression results:');
-          print(
-              '  - Original: ${(originalSize / 1024 / 1024).toStringAsFixed(2)} MB');
-          print(
-              '  - Compressed: ${(compressedSize / 1024 / 1024).toStringAsFixed(2)} MB');
-          print(
-              '  - Space saved: ${(spaceSaved / 1024 / 1024).toStringAsFixed(2)} MB ($compressionRatio%)');
-        }
-      } catch (compressionError) {
+        print('📊 [downloadManager] Compression results:');
+        print(
+            '  - Original: ${(originalSize / 1024 / 1024).toStringAsFixed(2)} MB');
+        print(
+            '  - Compressed: ${(compressedSize / 1024 / 1024).toStringAsFixed(2)} MB');
+        print(
+            '  - Space saved: ${(spaceSaved / 1024 / 1024).toStringAsFixed(2)} MB ($compressionRatio%)');
+            } catch (compressionError) {
         print('❌ [downloadManager] Compression failed: $compressionError');
 
         // Fallback: Copy original file without compression
