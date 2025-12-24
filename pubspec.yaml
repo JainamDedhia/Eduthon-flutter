@@ -50,7 +50,7 @@ dependencies:
   
   # Storage & Compression
   shared_preferences: ^2.3.3
-  archive: ^3.6.1  # For gzip compression
+  archive: 4.0.7  # For gzip compression
   
   # Network status
   connectivity_plus: ^6.1.1
@@ -73,6 +73,10 @@ dependencies:
  # Charts
   fl_chart: ^0.69.0
   cupertino_icons: ^1.0.8
+
+  #model
+  llama_flutter_android: ^0.1.1
+  
 
 dev_dependencies:
   flutter_test:

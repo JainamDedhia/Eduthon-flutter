@@ -16,39 +16,92 @@ class SummaryQuizOfflineService {
     required Function(Exception) onError,
   }) async {
     final modelAvailable = await LLMSummaryService.isModelAvailable();
-    
+
     String? selectedLanguage;
-    
+    double selectedGrade = 5.0; // Default Grade 5
+
+    // Always ask for Grade Level preference
+    final double? grade = await showDialog<double>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        double currentGrade = 5.0;
+        return StatefulBuilder(
+          builder:
+              (context, setState) => AlertDialog(
+                title: const Text('🎓 Student Level'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Select target grade level (1-10):'),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Grade ${currentGrade.round()}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                    Slider(
+                      value: currentGrade,
+                      min: 1,
+                      max: 10,
+                      divisions: 9,
+                      label: 'Grade ${currentGrade.round()}',
+                      onChanged: (val) => setState(() => currentGrade = val),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, currentGrade),
+                    child: const Text('Continue'),
+                  ),
+                ],
+              ),
+        );
+      },
+    );
+
+    if (grade == null) return; // Cancelled
+    selectedGrade = grade;
+
     if (modelAvailable) {
       selectedLanguage = await showDialog<String>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.language, color: Color(0xFF4A90E2)),
-              SizedBox(width: 8),
-              Text('Select Language'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '🤖 Local AI Model detected!\nChoose summary language:',
-                style: TextStyle(fontSize: 14),
-                textAlign: TextAlign.center,
+        builder:
+            (context) => AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.language, color: Color(0xFF4A90E2)),
+                  SizedBox(width: 8),
+                  Text('Select Language'),
+                ],
               ),
-              const SizedBox(height: 20),
-              _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
-              const SizedBox(height: 12),
-              _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
-              const SizedBox(height: 12),
-              _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
-            ],
-          ),
-        ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '🤖 Local AI Model detected!\nChoose summary language:',
+                    style: TextStyle(fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
+                  const SizedBox(height: 12),
+                  _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
+                  const SizedBox(height: 12),
+                  _buildLanguageOption(
+                    context,
+                    'मराठी (Marathi)',
+                    'mr',
+                    '🇮🇳',
+                  ),
+                ],
+              ),
+            ),
       );
-      
+
       if (selectedLanguage == null) return;
     }
 
@@ -59,43 +112,70 @@ class SummaryQuizOfflineService {
       print('🔄 Starting offline generation for: ${file.name}');
 
       setProgress(0.15);
-      final text = await SummaryGenerator.extractTextFromPDF(file.localPath);
-      
-      if (text.isEmpty) {
+      final rawText = await SummaryGenerator.extractTextFromPDF(file.localPath);
+
+      if (rawText.isEmpty) {
         throw Exception('Could not extract text from PDF');
       }
+
+      // Clean the text dynamically using our new WordJoiner and other rules
+      print('🧹 Cleaning text...');
+      final text = SummaryGenerator.cleanText(rawText);
+
+      // Detect subject
+      final subject = SummaryGenerator.detectSubject(text);
+      print('📚 Detected Subject: $subject');
+
+      // Estimate original grade level
+      final estimatedGrade = SummaryGenerator.estimateGradeLevel(text);
+      print(
+        '📊 Estimated Text Complexity: Grade ${estimatedGrade.toStringAsFixed(1)}',
+      );
 
       String summary;
       List<Map<String, dynamic>> quiz;
 
       if (modelAvailable && selectedLanguage != null) {
         print('🤖 [SummaryQuiz] Using local LLM model');
-        
+
         setProgress(0.4);
-        summary = await LLMSummaryService.generateSummaryWithLLM(
+        print('🤖 [SummaryQuiz] Using local LLM model');
+
+        setProgress(0.4);
+        final rawSummary = await LLMSummaryService.generateSummaryWithLLM(
           text: text,
           language: selectedLanguage,
         );
+        summary = SummaryGenerator.cleanText(rawSummary);
 
         setProgress(0.65);
         quiz = await LLMSummaryService.generateQuizWithLLM(
           summary: summary,
           language: selectedLanguage,
-          numQuestions: 5,
+          numQuestions: 10,
         );
       } else {
-        print('📝 [SummaryQuiz] Using rule-based generation');
-        
+        print(
+          '📝 [SummaryQuiz] Using rule-based generation (Grade ${selectedGrade.round()})',
+        );
+
         setProgress(0.4);
-        summary = await SummaryGenerator.generateSummary(text);
+        summary = await SummaryGenerator.generateSummary(
+          text,
+          gradeLevel: selectedGrade,
+        );
 
         setProgress(0.65);
-        quiz = await SummaryGenerator.generateQuiz(summary);
+        quiz = await SummaryGenerator.generateQuiz(
+          summary,
+          gradeLevel: selectedGrade,
+          numQuestions: 10,
+        );
       }
 
       setProgress(0.85);
       print('🧠 Generating mind map...');
-      
+
       final mindMap = await MindMapGenerator.generateMindMap(
         summary: summary,
         quiz: quiz,
@@ -103,19 +183,17 @@ class SummaryQuizOfflineService {
       );
 
       setProgress(1.0);
-      
+
       await OfflineDB.saveSummaryAndQuiz(
         file.classCode,
         file.name,
         summary,
         quiz,
       );
+      // Note: We could save subject if OfflineDB supported it,
+      // but for now we just use it for logic/logging or could inject into summary header.
 
-      await OfflineDB.saveMindMap(
-        file.classCode,
-        file.name,
-        mindMap.toJson(),
-      );
+      await OfflineDB.saveMindMap(file.classCode, file.name, mindMap.toJson());
 
       print('✅ Summary, Quiz, and Mind Map saved');
 
@@ -147,7 +225,12 @@ class SummaryQuizOfflineService {
     }
   }
 
-  static Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
+  static Widget _buildLanguageOption(
+    BuildContext context,
+    String name,
+    String code,
+    String flag,
+  ) {
     return InkWell(
       onTap: () => Navigator.pop(context, code),
       child: Container(
@@ -163,10 +246,7 @@ class SummaryQuizOfflineService {
             const SizedBox(width: 12),
             Text(
               name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ],
         ),

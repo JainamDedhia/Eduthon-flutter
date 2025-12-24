@@ -9,7 +9,7 @@
     },
     {
       "name": "archive",
-      "rootUri": "file:///C:/Users/Acer/AppData/Local/Pub/Cache/hosted/pub.dev/archive-3.6.1",
+      "rootUri": "file:///C:/Users/Acer/AppData/Local/Pub/Cache/hosted/pub.dev/archive-4.0.7",
       "packageUri": "lib/",
       "languageVersion": "3.0"
     },
@@ -290,6 +290,12 @@
       "languageVersion": "3.6"
     },
     {
+      "name": "llama_flutter_android",
+      "rootUri": "file:///C:/Users/Acer/AppData/Local/Pub/Cache/hosted/pub.dev/llama_flutter_android-0.1.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
       "name": "matcher",
       "rootUri": "file:///C:/Users/Acer/AppData/Local/Pub/Cache/hosted/pub.dev/matcher-0.12.17",
       "packageUri": "lib/",
@@ -472,6 +478,12 @@
     {
       "name": "plugin_platform_interface",
       "rootUri": "file:///C:/Users/Acer/AppData/Local/Pub/Cache/hosted/pub.dev/plugin_platform_interface-2.1.8",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
+    },
+    {
+      "name": "posix",
+      "rootUri": "file:///C:/Users/Acer/AppData/Local/Pub/Cache/hosted/pub.dev/posix-6.0.3",
       "packageUri": "lib/",
       "languageVersion": "3.0"
     },

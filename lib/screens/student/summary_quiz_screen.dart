@@ -1,23 +1,21 @@
 // FILE: lib/screens/student/summary_quiz_screen.dart
 import 'package:flutter/material.dart';
-import '../../services/summary_generator.dart';
+import 'dart:convert';
 import '../../services/mind_map_generator.dart';
 import '../../models/models.dart';
 import 'package:provider/provider.dart';
 import '../../services/quiz_sync_service.dart';
 import '../../providers/auth_provider.dart';
-import 'package:claudetest/services/llm_summary_service.dart';
 import 'package:claudetest/services/offline_db.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import '../../services/onboarding_service.dart';
 import '../../services/tts_service.dart';
 import '../../services/stt_service.dart';
 import '../../services/translation_service.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../services/server_api_service.dart';
-import '../../widgets/model_selection_dialog.dart';
 import 'summary_quiz_online_service.dart';
 import 'summary_quiz_offline_service.dart';
+import '../../services/summary_generator.dart';
 import 'onboarding_content_widgets.dart';
 import 'chatbot_screen.dart';
 import 'package:file_picker/file_picker.dart';
@@ -26,7 +24,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:claudetest/services/streak_service.dart';
 import 'package:claudetest/widgets/streak_widget.dart';
 
-class SummaryQuizScreen extends StatefulWidget {  
+class SummaryQuizScreen extends StatefulWidget {
   const SummaryQuizScreen({super.key});
 
   @override
@@ -38,7 +36,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   bool _loading = true;
   String? _processingFile;
   double _progress = 0.0;
-  
+
   final GlobalKey _fileListKey = GlobalKey();
   final GlobalKey _firstGenerateButtonKey = GlobalKey();
   final GlobalKey _firstViewButtonKey = GlobalKey();
@@ -50,7 +48,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   void initState() {
     super.initState();
     _loadOfflineFiles();
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndShowOnboarding();
     });
@@ -74,7 +72,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
 
   void _showOnboarding() {
     final targets = <TargetFocus>[];
-  
+
     targets.add(
       TargetFocus(
         identify: "generate_button",
@@ -90,7 +88,8 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
               return OnboardingContentWidgets.buildOnboardingContent(
                 icon: Icons.auto_awesome,
                 title: '✨ Generate AI Content',
-                description: 'Tap this button to create:\n• Summary\n• Quiz questions\n• Mind map',
+                description:
+                    'Tap this button to create:\n• Summary\n• Quiz questions\n• Mind map',
                 onNext: () => controller.next(),
                 onSkip: () => _skipOnboarding(controller),
               );
@@ -99,7 +98,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
         ],
       ),
     );
-    
+
     targets.add(
       TargetFocus(
         identify: "view_button",
@@ -113,7 +112,8 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
               return OnboardingContentWidgets.buildOnboardingContent(
                 icon: Icons.visibility,
                 title: '👁️ View Results',
-                description: 'After generating, tap here to:\n• Read summary\n• Take quiz\n• See mind map',
+                description:
+                    'After generating, tap here to:\n• Read summary\n• Take quiz\n• See mind map',
                 onNext: () => _finishOnboarding(controller),
                 onSkip: () => _skipOnboarding(controller),
                 isLast: true,
@@ -123,7 +123,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
         ],
       ),
     );
-    
+
     _tutorialCoachMark = TutorialCoachMark(
       targets: targets,
       colorShadow: Colors.black,
@@ -137,7 +137,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
         return true;
       },
     );
-    
+
     _tutorialCoachMark?.show(context: context);
   }
 
@@ -155,7 +155,8 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     setState(() => _loading = true);
     try {
       final files = await OfflineDB.getAllOfflineFiles();
-      final pdfFiles = files.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
+      final pdfFiles =
+          files.where((f) => f.name.toLowerCase().endsWith('.pdf')).toList();
       setState(() {
         _offlineFiles = pdfFiles;
         _loading = false;
@@ -167,44 +168,43 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
     }
   }
 
-  
-
   Future<void> _generateSummaryQuizAndMindMap(FileRecord file) async {
-  // Check connectivity first
-  final isOnline = await SummaryQuizOnlineService.checkConnectivity();
+    // Check connectivity first
+    final isOnline = await SummaryQuizOnlineService.checkConnectivity();
 
-  if (!isOnline) {
-    // No internet - use offline mode directly
-    print('📴 [SummaryQuiz] No internet - using offline mode');
-    await _generateOfflineMode(file);
-    return;
-  }
-  await StreakService.recordActivity();
-
-  // Has internet - check if server is healthy
-  print('🌐 [SummaryQuiz] Checking server health...');
-  final serverHealthy = await ServerAPIService.isServerHealthy();
-
-  if (serverHealthy) {
-    // Server is up - show model selection
-    print('✅ [SummaryQuiz] Server healthy - showing model selection');
-    await _generateWithServerAPI(file);
-  } else {
-    // Server is down - fallback to offline
-    print('⚠️ [SummaryQuiz] Server unreachable - using offline mode');
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('📴 Server unavailable - using offline mode'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (!isOnline) {
+      // No internet - use offline mode directly
+      print('📴 [SummaryQuiz] No internet - using offline mode');
+      await _generateOfflineMode(file);
+      return;
     }
-    
-    await _generateOfflineMode(file);
+    await StreakService.recordActivity();
+
+    // Has internet - check if server is healthy
+    print('🌐 [SummaryQuiz] Checking server health...');
+    final serverHealthy = await ServerAPIService.isServerHealthy();
+
+    if (serverHealthy) {
+      // Server is up - show model selection
+      print('✅ [SummaryQuiz] Server healthy - showing model selection');
+      await _generateWithServerAPI(file);
+    } else {
+      // Server is down - fallback to offline
+      print('⚠️ [SummaryQuiz] Server unreachable - using offline mode');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('📴 Server unavailable - using offline mode'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
+      await _generateOfflineMode(file);
+    }
   }
-}
+
   Future<void> _generateWithServerAPI(FileRecord file) async {
     await SummaryQuizOnlineService.generateWithServerAPI(
       context: context,
@@ -230,9 +230,12 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
 
   Future<void> _viewResults(FileRecord file) async {
     try {
-      final result = await OfflineDB.getSummaryAndQuiz(file.classCode, file.name);
+      final result = await OfflineDB.getSummaryAndQuiz(
+        file.classCode,
+        file.name,
+      );
       final mindMapData = await OfflineDB.getMindMap(file.classCode, file.name);
-      
+
       if (result == null) {
         throw Exception('No summary found. Generate it first!');
       }
@@ -240,59 +243,71 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
       final language = await _showLanguageSelectionDialog();
       if (language == null) return;
 
-      String summary = result['summary'] as String;
+      String rawSummary = result['summary'] as String;
+      String summary = SummaryGenerator.cleanText(rawSummary);
       final quizRaw = result['quiz'] as List<dynamic>;
-      
-      List<Map<String, dynamic>> quiz = quizRaw.map((item) {
-        if (item is Map<String, dynamic>) {
-          return item;
-        } else if (item is Map) {
-          return Map<String, dynamic>.from(item);
-        } else {
-          throw Exception('Invalid quiz data format');
-        }
-      }).toList();
+
+      List<Map<String, dynamic>> quiz =
+          quizRaw.map((item) {
+            if (item is Map<String, dynamic>) {
+              return item;
+            } else if (item is Map) {
+              return Map<String, dynamic>.from(item);
+            } else {
+              throw Exception('Invalid quiz data format');
+            }
+          }).toList();
 
       if (language != 'en') {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => WillPopScope(
-            onWillPop: () async => false,
-            child: AlertDialog(
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 20),
-                  Text(
-                    'Translating to ${TranslationService.getLanguageName(language)}...',
-                    textAlign: TextAlign.center,
+          builder:
+              (context) => WillPopScope(
+                onWillPop: () async => false,
+                child: AlertDialog(
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 20),
+                      Text(
+                        'Translating to ${TranslationService.getLanguageName(language)}...',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
         );
 
         try {
           summary = await _translationService.translate(summary, language);
-          
+
           for (int i = 0; i < quiz.length; i++) {
             final question = quiz[i]['question'] as String? ?? '';
-            quiz[i]['question'] = await _translationService.translate(question, language);
-            
+            quiz[i]['question'] = await _translationService.translate(
+              question,
+              language,
+            );
+
             final options = quiz[i]['options'] as List<dynamic>? ?? [];
             for (int j = 0; j < options.length; j++) {
               final optMap = options[j] as Map<String, dynamic>;
               final optText = optMap['text'] as String? ?? '';
-              optMap['text'] = await _translationService.translate(optText, language);
+              optMap['text'] = await _translationService.translate(
+                optText,
+                language,
+              );
             }
-            
+
             final answerText = quiz[i]['answer_text'] as String? ?? '';
-            quiz[i]['answer_text'] = await _translationService.translate(answerText, language);
+            quiz[i]['answer_text'] = await _translationService.translate(
+              answerText,
+              language,
+            );
           }
-          
+
           print('✅ [ViewResults] All content translated to $language');
         } catch (e) {
           print('❌ [ViewResults] Translation error: $e');
@@ -306,7 +321,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
             );
           }
         }
-        
+
         if (mounted) {
           Navigator.pop(context);
         }
@@ -327,22 +342,23 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => SummaryQuizResultScreen(
-            fileName: file.name,
-            summary: summary,
-            quiz: quiz,
-            classCode: file.classCode,
-            mindMap: mindMap,
-            selectedLanguage: language,
-          ),
+          builder:
+              (context) => SummaryQuizResultScreen(
+                fileName: file.name,
+                summary: summary,
+                quiz: quiz,
+                classCode: file.classCode,
+                mindMap: mindMap,
+                selectedLanguage: language,
+              ),
         ),
       );
     } catch (e) {
       print('❌ Error viewing results: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
       }
     }
   }
@@ -350,36 +366,44 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   Future<String?> _showLanguageSelectionDialog() async {
     return await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.language, color: Color(0xFF4A90E2)),
-            SizedBox(width: 8),
-            Text('Select Language'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              '🌐 Choose language for content display and voice features',
-              style: TextStyle(fontSize: 14),
-              textAlign: TextAlign.center,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-            const SizedBox(height: 20),
-            _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
-            const SizedBox(height: 12),
-            _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
-            const SizedBox(height: 12),
-            _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
-          ],
-        ),
-      ),
+            title: const Row(
+              children: [
+                Icon(Icons.language, color: Color(0xFF4A90E2)),
+                SizedBox(width: 8),
+                Text('Select Language'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '🌐 Choose language for content display and voice features',
+                  style: TextStyle(fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
+                const SizedBox(height: 12),
+                _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
+                const SizedBox(height: 12),
+                _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
+              ],
+            ),
+          ),
     );
   }
 
-  Widget _buildLanguageOption(BuildContext context, String name, String code, String flag) {
+  Widget _buildLanguageOption(
+    BuildContext context,
+    String name,
+    String code,
+    String flag,
+  ) {
     return InkWell(
       onTap: () => Navigator.pop(context, code),
       child: Container(
@@ -395,10 +419,7 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
             const SizedBox(width: 12),
             Text(
               name,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
           ],
         ),
@@ -407,48 +428,50 @@ class _SummaryQuizScreenState extends State<SummaryQuizScreen> {
   }
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: Color(0xFFF5F5F5),
-    appBar: AppBar(
-      title: const Text(
-        '🤖 AI Summary & Quiz',
-        style: TextStyle(fontWeight: FontWeight.bold),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Color(0xFFF5F5F5),
+      appBar: AppBar(
+        title: const Text(
+          '🤖 AI Summary & Quiz',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: const Color(0xFF4A90E2),
+        elevation: 0,
       ),
-      backgroundColor: const Color(0xFF4A90E2),
-      elevation: 0,
-    ),
-    body: _loading
-        ? const Center(child: CircularProgressIndicator())
-        : _offlineFiles.isEmpty
-            ? _buildEmptyState()
-            : Column(
+      body:
+          _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _offlineFiles.isEmpty
+              ? _buildEmptyState()
+              : Column(
                 children: [
                   _buildInfoBanner(),
-                  
+
                   if (_processingFile != null) _buildProcessingCard(),
-                  
+
                   Expanded(
                     child: ListView.builder(
                       key: _fileListKey,
                       padding: const EdgeInsets.all(16),
                       itemCount: _offlineFiles.length,
-                      itemBuilder: (context, index) =>
-                          _buildFileCard(_offlineFiles[index], index),
+                      itemBuilder:
+                          (context, index) =>
+                              _buildFileCard(_offlineFiles[index], index),
                     ),
                   ),
                 ],
               ),
-    
-    // ADD THIS: Floating Action Button for Upload
-    floatingActionButton: FloatingActionButton(
-      onPressed: _pickAndUploadPdf,
-      backgroundColor: Color(0xFF66BB6A),
-      child: Icon(Icons.add, size: 32),
-      tooltip: 'Upload Personal PDF',
-    ),
-  );
-}
+
+      // ADD THIS: Floating Action Button for Upload
+      floatingActionButton: FloatingActionButton(
+        onPressed: _pickAndUploadPdf,
+        backgroundColor: Color(0xFF66BB6A),
+        tooltip: 'Upload Personal PDF',
+        child: Icon(Icons.add, size: 32),
+      ),
+    );
+  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -482,10 +505,7 @@ Widget build(BuildContext context) {
             const SizedBox(height: 12),
             Text(
               'Download study materials from your classes first!',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
@@ -542,10 +562,7 @@ Widget build(BuildContext context) {
                 SizedBox(height: 4),
                 Text(
                   '1️⃣ Click ✨ to generate  2️⃣ Click 👁️ to view',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF1976D2),
-                  ),
+                  style: TextStyle(fontSize: 13, color: Color(0xFF1976D2)),
                 ),
               ],
             ),
@@ -582,7 +599,11 @@ Widget build(BuildContext context) {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(Icons.auto_awesome, color: Colors.orange[700], size: 24),
+                child: Icon(
+                  Icons.auto_awesome,
+                  color: Colors.orange[700],
+                  size: 24,
+                ),
               ),
               SizedBox(width: 12),
               Expanded(
@@ -600,10 +621,7 @@ Widget build(BuildContext context) {
                     SizedBox(height: 4),
                     Text(
                       _processingFile ?? '',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.orange[800],
-                      ),
+                      style: TextStyle(fontSize: 13, color: Colors.orange[800]),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -636,10 +654,7 @@ Widget build(BuildContext context) {
               ),
               Text(
                 _getProgressText(),
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.orange[800],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.orange[800]),
               ),
             ],
           ),
@@ -655,216 +670,236 @@ Widget build(BuildContext context) {
     if (_progress < 0.95) return 'Drawing mind map...';
     return 'Almost done!';
   }
+
   Future<void> _pickAndUploadPdf() async {
-  try {
-    // Pick PDF file
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['pdf'],
-    );
+    try {
+      // Pick PDF file
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+      );
 
-    if (result == null || result.files.single.path == null) {
-      print('⚠️ No file selected');
-      return;
-    }
-     await StreakService.recordActivity();
+      if (result == null || result.files.single.path == null) {
+        print('⚠️ No file selected');
+        return;
+      }
+      await StreakService.recordActivity();
 
-    final file = File(result.files.single.path!);
-    final fileName = result.files.single.name;
+      final file = File(result.files.single.path!);
+      final fileName = result.files.single.name;
 
-    // Check if file already exists
-    final exists = await OfflineDB.checkFileExists('personal', fileName);
-    if (exists) {
+      // Check if file already exists
+      final exists = await OfflineDB.checkFileExists('personal', fileName);
+      if (exists) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ File "$fileName" already uploaded'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Check file size (max 10 MB)
+      final fileSize = await file.length();
+      const maxSize = 10 * 1024 * 1024; // 10 MB
+
+      if (fileSize > maxSize) {
+        if (mounted) {
+          _showFileTooLargeDialog(fileSize);
+        }
+        return;
+      }
+
+      // Show loading dialog
       if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder:
+              (context) => WillPopScope(
+                onWillPop: () async => false,
+                child: AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 20),
+                      Text('Uploading PDF...', style: TextStyle(fontSize: 16)),
+                    ],
+                  ),
+                ),
+              ),
+        );
+      }
+
+      // Copy file to app directory
+      final appDir = await getApplicationDocumentsDirectory();
+      final personalDir = Directory('${appDir.path}/personalFiles');
+
+      if (!await personalDir.exists()) {
+        await personalDir.create(recursive: true);
+      }
+
+      final sanitizedName = fileName.replaceAll(
+        RegExp(r'[^a-zA-Z0-9._-]'),
+        '_',
+      );
+      final localPath = '${personalDir.path}/$sanitizedName';
+
+      await file.copy(localPath);
+
+      // Save to database with "personal" classCode
+      await OfflineDB.saveFileRecord(
+        'personal',
+        fileName,
+        localPath,
+        originalSize: fileSize,
+      );
+
+      // Reload files
+      await _loadOfflineFiles();
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ File "$fileName" already uploaded'),
-            backgroundColor: Colors.orange,
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Expanded(child: Text('✅ PDF uploaded successfully!')),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
           ),
         );
       }
-      return;
-    }
+    } catch (e) {
+      print('❌ Error uploading PDF: $e');
 
-    // Check file size (max 10 MB)
-    final fileSize = await file.length();
-    const maxSize = 10 * 1024 * 1024; // 10 MB
-    
-    if (fileSize > maxSize) {
       if (mounted) {
-        _showFileTooLargeDialog(fileSize);
+        // Close loading dialog if open
+        Navigator.of(context, rootNavigator: true).pop();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Failed to upload: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
-      return;
-    }
-
-    // Show loading dialog
-    if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => WillPopScope(
-          onWillPop: () async => false,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 20),
-                Text('Uploading PDF...', style: TextStyle(fontSize: 16)),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Copy file to app directory
-    final appDir = await getApplicationDocumentsDirectory();
-    final personalDir = Directory('${appDir.path}/personalFiles');
-    
-    if (!await personalDir.exists()) {
-      await personalDir.create(recursive: true);
-    }
-
-    final sanitizedName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final localPath = '${personalDir.path}/$sanitizedName';
-    
-    await file.copy(localPath);
-
-    // Save to database with "personal" classCode
-    await OfflineDB.saveFileRecord(
-      'personal',
-      fileName,
-      localPath,
-      originalSize: fileSize,
-    );
-
-    // Reload files
-    await _loadOfflineFiles();
-
-    if (mounted) {
-      Navigator.pop(context); // Close loading dialog
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.white),
-              SizedBox(width: 8),
-              Expanded(child: Text('✅ PDF uploaded successfully!')),
-            ],
-          ),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  } catch (e) {
-    print('❌ Error uploading PDF: $e');
-    
-    if (mounted) {
-      // Close loading dialog if open
-      Navigator.of(context, rootNavigator: true).pop();
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Failed to upload: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
-}
 
-void _showFileTooLargeDialog(int fileSize) {
-  final sizeMB = (fileSize / 1024 / 1024).toStringAsFixed(1);
-  
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Row(
-        children: [
-          Icon(Icons.warning, color: Colors.orange, size: 28),
-          SizedBox(width: 12),
-          Text('File Too Large'),
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'This PDF is too large for processing.',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: 12),
-          Text('File size: $sizeMB MB', style: TextStyle(fontWeight: FontWeight.bold)),
-          Text('Maximum allowed: 10 MB', style: TextStyle(fontWeight: FontWeight.bold)),
-          SizedBox(height: 16),
-          Container(
-            padding: EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange[50],
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.orange[200]!),
+  void _showFileTooLargeDialog(int fileSize) {
+    final sizeMB = (fileSize / 1024 / 1024).toStringAsFixed(1);
+
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
+            title: Row(
+              children: [
+                Icon(Icons.warning, color: Colors.orange, size: 28),
+                SizedBox(width: 12),
+                Text('File Too Large'),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.lightbulb, size: 18, color: Colors.orange[800]),
-                    SizedBox(width: 6),
-                    Text(
-                      'Why this limit?',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.orange[900],
-                        fontSize: 13,
+                Text(
+                  'This PDF is too large for processing.',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'File size: $sizeMB MB',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Maximum allowed: 10 MB',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.lightbulb,
+                            size: 18,
+                            color: Colors.orange[800],
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Why this limit?',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange[900],
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                      SizedBox(height: 8),
+                      Text(
+                        '• Large PDFs take too long to process\n'
+                        '• Text extraction may fail\n'
+                        '• AI summary quality decreases\n'
+                        '• May cause app to crash',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange[900],
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  '💡 Tips to reduce file size:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 SizedBox(height: 8),
                 Text(
-                  '• Large PDFs take too long to process\n'
-                  '• Text extraction may fail\n'
-                  '• AI summary quality decreases\n'
-                  '• May cause app to crash',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.orange[900],
-                    height: 1.5,
-                  ),
+                  '• Split PDF into smaller sections\n'
+                  '• Compress using online tools\n'
+                  '• Remove unnecessary images/pages',
+                  style: TextStyle(fontSize: 12, height: 1.6),
                 ),
               ],
             ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('OK', style: TextStyle(fontSize: 15)),
+              ),
+            ],
           ),
-          SizedBox(height: 16),
-          Text(
-            '💡 Tips to reduce file size:',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          ),
-          SizedBox(height: 8),
-          Text(
-            '• Split PDF into smaller sections\n'
-            '• Compress using online tools\n'
-            '• Remove unnecessary images/pages',
-            style: TextStyle(fontSize: 12, height: 1.6),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text('OK', style: TextStyle(fontSize: 15)),
-        ),
-      ],
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildFileCard(FileRecord file, int index) {
     final isProcessing = _processingFile == file.name;
@@ -872,9 +907,7 @@ void _showFileTooLargeDialog(int fileSize) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
@@ -922,36 +955,43 @@ void _showFileTooLargeDialog(int fileSize) {
                         ),
                         SizedBox(height: 4),
                         Container(
-  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-  decoration: BoxDecoration(
-    color: file.classCode == 'personal' 
-        ? Color(0xFFE8F5E9)  // Green tint for personal files
-        : Color(0xFFE3F2FD),
-    borderRadius: BorderRadius.circular(6),
-  ),
-  child: Text(
-    file.classCode == 'personal' 
-        ? '📱 Personal'  // Show "Personal" label
-        : 'Class: ${file.classCode}',
-    style: TextStyle(
-      fontSize: 11,
-      color: file.classCode == 'personal'
-          ? Color(0xFF2E7D32)
-          : Color(0xFF1976D2),
-      fontWeight: FontWeight.w600,
-    ),
-  ),
-),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                file.classCode == 'personal'
+                                    ? Color(
+                                      0xFFE8F5E9,
+                                    ) // Green tint for personal files
+                                    : Color(0xFFE3F2FD),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            file.classCode == 'personal'
+                                ? '📱 Personal' // Show "Personal" label
+                                : 'Class: ${file.classCode}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color:
+                                  file.classCode == 'personal'
+                                      ? Color(0xFF2E7D32)
+                                      : Color(0xFF1976D2),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
-              
+
               SizedBox(height: 16),
               Divider(height: 1, color: Colors.grey[300]),
               SizedBox(height: 16),
-              
+
               if (isProcessing)
                 Center(
                   child: Column(
@@ -1002,9 +1042,9 @@ void _showFileTooLargeDialog(int fileSize) {
                         ),
                       ),
                     ),
-                    
+
                     SizedBox(width: 12),
-                    
+
                     Expanded(
                       child: ElevatedButton.icon(
                         key: index == 0 ? _firstViewButtonKey : null,
@@ -1057,20 +1097,21 @@ class SummaryQuizResultScreen extends StatefulWidget {
   });
 
   @override
-  State<SummaryQuizResultScreen> createState() => _SummaryQuizResultScreenState();
+  State<SummaryQuizResultScreen> createState() =>
+      _SummaryQuizResultScreenState();
 }
 
 class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
   Map<int, String> userAnswers = {};
   bool showResults = false;
-  
+
   final TTSService _ttsService = TTSService();
   final STTService _sttService = STTService();
   final TranslationService _translationService = TranslationService();
   bool _isTTSSpeaking = false;
   bool _isSTTListening = false;
   int? _currentQuestionIndex;
-  
+
   final GlobalKey _summaryTabKey = GlobalKey();
   final GlobalKey _quizTabKey = GlobalKey();
   final GlobalKey _mindMapTabKey = GlobalKey();
@@ -1082,7 +1123,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
   void initState() {
     super.initState();
     _initializeTTS();
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAndShowResultOnboarding();
     });
@@ -1100,7 +1141,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
 
   void _showResultOnboarding() {
     final targets = <TargetFocus>[];
-    
+
     targets.add(
       TargetFocus(
         identify: "summary_tab",
@@ -1114,7 +1155,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
               return OnboardingContentWidgets.buildResultOnboardingContent(
                 icon: Icons.notes,
                 title: '📝 Summary Tab',
-                description: 'Read the AI-generated summary of your PDF content here.',
+                description:
+                    'Read the AI-generated summary of your PDF content here.',
                 onNext: () => controller.next(),
                 onSkip: () => _skipResultOnboarding(controller),
               );
@@ -1123,7 +1165,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         ],
       ),
     );
-    
+
     targets.add(
       TargetFocus(
         identify: "tts_button",
@@ -1137,7 +1179,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
               return OnboardingContentWidgets.buildResultOnboardingContent(
                 icon: Icons.volume_up,
                 title: '🔊 Read Aloud',
-                description: 'Tap this button to hear the summary read aloud in your selected language.',
+                description:
+                    'Tap this button to hear the summary read aloud in your selected language.',
                 onNext: () => controller.next(),
                 onSkip: () => _skipResultOnboarding(controller),
               );
@@ -1146,7 +1189,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         ],
       ),
     );
-    
+
     targets.add(
       TargetFocus(
         identify: "quiz_tab",
@@ -1160,7 +1203,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
               return OnboardingContentWidgets.buildResultOnboardingContent(
                 icon: Icons.quiz,
                 title: '📝 Quiz Tab',
-                description: 'Test your knowledge with AI-generated quiz questions.',
+                description:
+                    'Test your knowledge with AI-generated quiz questions.',
                 onNext: () => controller.next(),
                 onSkip: () => _skipResultOnboarding(controller),
               );
@@ -1169,7 +1213,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         ],
       ),
     );
-    
+
     if (widget.quiz.isNotEmpty) {
       targets.add(
         TargetFocus(
@@ -1184,7 +1228,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                 return OnboardingContentWidgets.buildResultOnboardingContent(
                   icon: Icons.mic,
                   title: '🎤 Voice Quiz',
-                  description: 'Answer quiz questions using your voice! The app will read the question and listen for your answer (A, B, C, or D).',
+                  description:
+                      'Answer quiz questions using your voice! The app will read the question and listen for your answer (A, B, C, or D).',
                   onNext: () => _finishResultOnboarding(controller),
                   onSkip: () => _skipResultOnboarding(controller),
                   isLast: true,
@@ -1195,7 +1240,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         ),
       );
     }
-    
+
     if (widget.mindMap != null) {
       targets.add(
         TargetFocus(
@@ -1210,7 +1255,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                 return OnboardingContentWidgets.buildResultOnboardingContent(
                   icon: Icons.account_tree,
                   title: '🧠 Mind Map',
-                  description: 'Visualize the key concepts and their relationships in an interactive mind map.',
+                  description:
+                      'Visualize the key concepts and their relationships in an interactive mind map.',
                   onNext: () => controller.next(),
                   onSkip: () => _skipResultOnboarding(controller),
                 );
@@ -1220,7 +1266,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         ),
       );
     }
-    
+
     _resultTutorialCoachMark = TutorialCoachMark(
       targets: targets,
       colorShadow: Colors.black,
@@ -1234,7 +1280,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         return true;
       },
     );
-    
+
     _resultTutorialCoachMark?.show(context: context);
   }
 
@@ -1274,7 +1320,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         final auth = Provider.of<AuthProvider>(context, listen: false);
         return auth.user?.uid ?? 'unknown';
       });
-      
+
       final result = QuizResult(
         studentId: studentId,
         classCode: widget.classCode,
@@ -1287,10 +1333,9 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         completedAt: DateTime.now().toIso8601String(),
         synced: false,
       );
-      
+
       await QuizSyncService.saveQuizResultLocally(result);
       print('✅ Quiz result saved: $correctAnswers/$totalQuestions');
-      
     } catch (e) {
       print('❌ Failed to save quiz result: $e');
     }
@@ -1300,20 +1345,21 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     if (userAnswers.length < widget.quiz.length) {
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('⚠️ Incomplete Quiz'),
-          
-          content: Text(
-            'You have answered ${userAnswers.length} out of ${widget.quiz.length} questions.\n\n'
-            'Please answer all questions before submitting.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Continue'),
+        builder:
+            (context) => AlertDialog(
+              title: const Text('⚠️ Incomplete Quiz'),
+
+              content: Text(
+                'You have answered ${userAnswers.length} out of ${widget.quiz.length} questions.\n\n'
+                'Please answer all questions before submitting.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Continue'),
+                ),
+              ],
             ),
-          ],
-        ),
       );
       return;
     }
@@ -1330,66 +1376,67 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
         correct++;
       }
     }
-    
+
     final score = (correct / widget.quiz.length * 100).toStringAsFixed(0);
     _saveQuizResult(correct, widget.quiz.length);
     _recordStreakActivity();
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('🎉 Quiz Complete!'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '$score%',
-              style: const TextStyle(
-                fontSize: 48,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF4A90E2),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('🎉 Quiz Complete!'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$score%',
+                  style: const TextStyle(
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4A90E2),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'You got $correct out of ${widget.quiz.length} correct!',
+                  style: const TextStyle(fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  setState(() {
+                    showResults = false;
+                    userAnswers.clear();
+                  });
+                },
+                child: const Text('Retry'),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'You got $correct out of ${widget.quiz.length} correct!',
-              style: const TextStyle(fontSize: 16),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                showResults = false;
-                userAnswers.clear();
-              });
-            },
-            child: const Text('Retry'),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
     );
   }
 
   Future<void> _recordStreakActivity() async {
-  final update = await StreakService.recordActivity();
-  
-  if (update.reachedMilestone && update.milestoneMessage != null) {
-    // Show celebration dialog
-    showMilestoneDialog(
-      context,
-      update.milestoneMessage!,
-      update.currentStreak,
-    );
+    final update = await StreakService.recordActivity();
+
+    if (update.reachedMilestone && update.milestoneMessage != null) {
+      // Show celebration dialog
+      showMilestoneDialog(
+        context,
+        update.milestoneMessage!,
+        update.currentStreak,
+      );
+    }
   }
-}
 
   Future<void> _toggleSummaryTTS() async {
     if (_isTTSSpeaking) {
@@ -1397,11 +1444,35 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       setState(() => _isTTSSpeaking = false);
     } else {
       setState(() => _isTTSSpeaking = true);
-      
+
       try {
         await _ttsService.setLanguageForReading(widget.selectedLanguage);
-        await _ttsService.speak(widget.summary);
-        
+
+        String textToSpeak = widget.summary;
+        try {
+          if (textToSpeak.trim().startsWith('{')) {
+            final Map<String, dynamic> data = jsonDecode(textToSpeak);
+            if (data.containsKey('sections')) {
+              // Construct a readable string from structured content
+              final buffer = StringBuffer();
+              final subject = data['subject'] as String? ?? '';
+              if (subject.isNotEmpty) buffer.writeln('Subject: $subject.');
+
+              final sections = data['sections'] as List<dynamic>;
+              for (final s in sections) {
+                final title = s['title'] as String? ?? '';
+                final content = s['content'] as String? ?? '';
+                buffer.writeln('$title. $content');
+              }
+              textToSpeak = buffer.toString();
+            }
+          }
+        } catch (e) {
+          // ignore, use original text
+        }
+
+        await _ttsService.speak(textToSpeak);
+
         await Future.delayed(Duration(milliseconds: 500));
         if (mounted && !_ttsService.isSpeaking) {
           setState(() => _isTTSSpeaking = false);
@@ -1455,14 +1526,13 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
 
       _ttsService.setOnCompletionHandler(() {
         print('✅ [VoiceQuiz] TTS ACTUALLY finished, now starting STT');
-        
+
         if (!mounted || _currentQuestionIndex != questionIndex) return;
-        
+
         _startSTTForQuestion(questionIndex);
       });
 
       await _ttsService.speak(ttsText);
-      
     } catch (e) {
       print('❌ [VoiceQuiz] Error: $e');
       _resetVoiceState();
@@ -1471,7 +1541,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
 
   Future<void> _startSTTForQuestion(int questionIndex) async {
     if (!mounted || _currentQuestionIndex != questionIndex) return;
-    
+
     final sttAvailable = await _sttService.isAvailable();
     if (!sttAvailable) {
       if (mounted) {
@@ -1492,7 +1562,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     });
 
     print('🎤 [VoiceQuiz] Starting STT after TTS finished...');
-    
+
     await _sttService.startListening(
       onResult: (recognizedWords) {
         _handleVoiceAnswer(questionIndex, recognizedWords);
@@ -1500,7 +1570,9 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
 
     Future.delayed(Duration(seconds: 10), () {
-      if (mounted && _isSTTListening && _currentQuestionIndex == questionIndex) {
+      if (mounted &&
+          _isSTTListening &&
+          _currentQuestionIndex == questionIndex) {
         _sttService.stopListening();
         setState(() {
           _isSTTListening = false;
@@ -1558,10 +1630,12 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       _ttsService.speak('You selected option $selectedOption');
     } else {
       setState(() => _currentQuestionIndex = null);
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ Could not recognize A, B, C, or D. Please try again.'),
+          content: Text(
+            '❌ Could not recognize A, B, C, or D. Please try again.',
+          ),
           backgroundColor: Colors.orange,
           duration: Duration(seconds: 3),
         ),
@@ -1592,10 +1666,11 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => ChatbotScreen(
-                        pdfContext: widget.summary,
-                        fileName: widget.fileName,
-                      ),
+                      builder:
+                          (context) => ChatbotScreen(
+                            pdfContext: widget.summary,
+                            fileName: widget.fileName,
+                          ),
                     ),
                   );
                 },
@@ -1606,19 +1681,15 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
               tabs: [
                 Tab(
                   key: _summaryTabKey,
-                  icon: Icon(Icons.notes), 
-                  text: 'Summary'
+                  icon: Icon(Icons.notes),
+                  text: 'Summary',
                 ),
-                Tab(
-                  key: _quizTabKey,
-                  icon: Icon(Icons.quiz), 
-                  text: 'Quiz'
-                ),
+                Tab(key: _quizTabKey, icon: Icon(Icons.quiz), text: 'Quiz'),
                 if (widget.mindMap != null)
                   Tab(
                     key: _mindMapTabKey,
-                    icon: Icon(Icons.account_tree), 
-                    text: 'Mind Map'
+                    icon: Icon(Icons.account_tree),
+                    text: 'Mind Map',
                   ),
               ],
             ),
@@ -1636,6 +1707,20 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
   }
 
   Widget _buildSummaryTab() {
+    // Try to parse JSON for structured content
+    Map<String, dynamic>? structuredData;
+    try {
+      if (widget.summary.trim().startsWith('{')) {
+        structuredData = jsonDecode(widget.summary);
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    if (structuredData != null && structuredData.containsKey('sections')) {
+      return _buildStructuredSummary(structuredData);
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Card(
@@ -1687,10 +1772,7 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
               const SizedBox(height: 16),
               Text(
                 widget.summary,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1.6,
-                ),
+                style: const TextStyle(fontSize: 15, height: 1.6),
               ),
             ],
           ),
@@ -1699,57 +1781,293 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
     );
   }
 
-  Widget _buildQuizTab() {
-    return widget.quiz.isEmpty
-        ? Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.quiz_outlined, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No quiz questions generated',
-                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          )
-        : Column(
+  Widget _buildStructuredSummary(Map<String, dynamic> data) {
+    final sections = data['sections'] as List<dynamic>? ?? [];
+    final objectives = data['learningObjectives'] as List<dynamic>? ?? [];
+    final activities = data['activities'] as List<dynamic>? ?? [];
+    final visualAids = data['visualAids'] as List<dynamic>? ?? [];
+    final subject = data['subject'] as String? ?? 'Subject';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with TTS
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                color: const Color(0xFFE3F2FD),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '${userAnswers.length}/${widget.quiz.length} answered',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    if (!showResults)
-                      ElevatedButton(
-                        onPressed: _submitQuiz,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF66BB6A),
-                        ),
-                        child: const Text('Submit Quiz'),
-                      ),
-                  ],
+              Expanded(
+                child: Text(
+                  subject,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF4A90E2),
+                  ),
                 ),
               ),
-              
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: widget.quiz.length,
-                  itemBuilder: (context, index) => _buildQuizCard(widget.quiz[index], index),
+              IconButton(
+                key: _ttsButtonKey,
+                onPressed:
+                    _toggleSummaryTTS, // This will read the raw JSON which is bad.
+                // Ideally TTS should read the structured content.
+                // But _toggleSummaryTTS uses widget.summary.
+                // I should probably update _toggleSummaryTTS to handle JSON too.
+                icon: Icon(
+                  _isTTSSpeaking ? Icons.stop_circle : Icons.volume_up,
+                  color: _isTTSSpeaking ? Colors.red : Color(0xFF4A90E2),
                 ),
               ),
             ],
-          );
+          ),
+          SizedBox(height: 20),
+
+          // Objectives
+          if (objectives.isNotEmpty) ...[
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue[100]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '🎯 Learning Objectives',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[900],
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  ...objectives.map(
+                    (o) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8.0),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '• ',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue[800],
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              o.toString(),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: Colors.blue[900],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: 20),
+          ],
+
+          // Sections
+          ...sections.map((s) {
+            final title = s['title'] as String? ?? '';
+            final content = s['content'] as String? ?? '';
+            return Card(
+              margin: EdgeInsets.only(bottom: 16),
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    Divider(color: Colors.grey[300]),
+                    SizedBox(height: 8),
+                    Text(content, style: TextStyle(fontSize: 15, height: 1.5)),
+                  ],
+                ),
+              ),
+            );
+          }),
+
+          // Visual Aids
+          if (visualAids.isNotEmpty) ...[
+            Text(
+              '👁️ Visual Aids Suggestions',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 10),
+            Container(
+              padding: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.purple[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.purple[100]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children:
+                    visualAids
+                        .map(
+                          (v) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '• ',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.purple[800],
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    v.toString(),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      color: Colors.purple[900],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                        .toList(),
+              ),
+            ),
+            SizedBox(height: 20),
+          ],
+
+          // Activities
+          if (activities.isNotEmpty) ...[
+            Text(
+              '🤝 Group Activities',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 10),
+            ...activities.map(
+              (a) => Card(
+                color: Colors.orange[50],
+                margin: EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.group,
+                            color: Colors.orange[800],
+                            size: 20,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            "Activity",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange[900],
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        a.toString(),
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.orange[900],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuizTab() {
+    return widget.quiz.isEmpty
+        ? Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.quiz_outlined, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'No quiz questions generated',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        )
+        : Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              color: const Color(0xFFE3F2FD),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '${userAnswers.length}/${widget.quiz.length} answered',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (!showResults)
+                    ElevatedButton(
+                      onPressed: _submitQuiz,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF66BB6A),
+                      ),
+                      child: const Text('Submit Quiz'),
+                    ),
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: widget.quiz.length,
+                itemBuilder:
+                    (context, index) =>
+                        _buildQuizCard(widget.quiz[index], index),
+              ),
+            ),
+          ],
+        );
   }
 
   Widget _buildMindMapTab() {
@@ -1757,7 +2075,10 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       return const Center(child: Text('No mind map available'));
     }
 
-    return _InteractiveMindMap(mindMap: widget.mindMap!, fileName: widget.fileName);
+    return _InteractiveMindMap(
+      mindMap: widget.mindMap!,
+      fileName: widget.fileName,
+    );
   }
 
   Widget _buildQuizCard(Map<String, dynamic> q, int index) {
@@ -1765,20 +2086,21 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
       final question = q['question'] as String? ?? 'Question unavailable';
       final answerLabel = q['answer_label'] as String? ?? 'A';
       final answerText = q['answer_text'] as String? ?? '';
-      
+
       final optionsRaw = q['options'];
       List<Map<String, dynamic>> options = [];
-      
+
       if (optionsRaw is List) {
-        options = optionsRaw.map((opt) {
-          if (opt is Map<String, dynamic>) {
-            return opt;
-          } else if (opt is Map) {
-            return Map<String, dynamic>.from(opt);
-          } else {
-            return {'label': 'X', 'text': 'Invalid option'};
-          }
-        }).toList();
+        options =
+            optionsRaw.map((opt) {
+              if (opt is Map<String, dynamic>) {
+                return opt;
+              } else if (opt is Map) {
+                return Map<String, dynamic>.from(opt);
+              } else {
+                return {'label': 'X', 'text': 'Invalid option'};
+              }
+            }).toList();
       }
 
       final userAnswer = userAnswers[index];
@@ -1808,9 +2130,10 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                     Container(
                       key: index == 0 ? _voiceQuizButtonKey : null,
                       decoration: BoxDecoration(
-                        color: isCurrentVoiceQuestion 
-                            ? Colors.red.withOpacity(0.1) 
-                            : Color(0xFF4A90E2).withOpacity(0.1),
+                        color:
+                            isCurrentVoiceQuestion
+                                ? Colors.red.withOpacity(0.1)
+                                : Color(0xFF4A90E2).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: IconButton(
@@ -1819,31 +2142,42 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                           duration: Duration(milliseconds: 300),
                           child: Icon(
                             isCurrentVoiceQuestion
-                                ? (_isSTTListening ? Icons.mic : Icons.volume_up)
+                                ? (_isSTTListening
+                                    ? Icons.mic
+                                    : Icons.volume_up)
                                 : Icons.mic_none,
-                            key: ValueKey('$isCurrentVoiceQuestion-$_isSTTListening'),
-                            color: isCurrentVoiceQuestion
-                                ? (_isSTTListening ? Colors.red : Colors.orange)
-                                : Color(0xFF4A90E2),
+                            key: ValueKey(
+                              '$isCurrentVoiceQuestion-$_isSTTListening',
+                            ),
+                            color:
+                                isCurrentVoiceQuestion
+                                    ? (_isSTTListening
+                                        ? Colors.red
+                                        : Colors.orange)
+                                    : Color(0xFF4A90E2),
                             size: 24,
                           ),
                         ),
-                        tooltip: isCurrentVoiceQuestion
-                            ? (_isSTTListening ? 'Listening...' : 'Reading...')
-                            : 'Voice Answer',
+                        tooltip:
+                            isCurrentVoiceQuestion
+                                ? (_isSTTListening
+                                    ? 'Listening...'
+                                    : 'Reading...')
+                                : 'Voice Answer',
                       ),
                     ),
                 ],
               ),
-              
+
               if (isCurrentVoiceQuestion) ...[
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _isSTTListening 
-                        ? Colors.red.withOpacity(0.1) 
-                        : Colors.orange.withOpacity(0.1),
+                    color:
+                        _isSTTListening
+                            ? Colors.red.withOpacity(0.1)
+                            : Colors.orange.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: _isSTTListening ? Colors.red : Colors.orange,
@@ -1879,18 +2213,18 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                   ),
                 ),
               ],
-              
+
               const SizedBox(height: 12),
-              
+
               ...options.map((opt) {
                 final label = opt['label'] as String? ?? '?';
                 final text = opt['text'] as String? ?? 'Option unavailable';
                 final isSelected = userAnswer == label;
                 final isCorrect = label == answerLabel;
-                
+
                 Color? backgroundColor;
                 Color? textColor;
-                
+
                 if (showResults) {
                   if (isCorrect) {
                     backgroundColor = Colors.green[100];
@@ -1903,24 +2237,28 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                   backgroundColor = const Color(0xFFE3F2FD);
                   textColor = const Color(0xFF1976D2);
                 }
-                
+
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: InkWell(
-                    onTap: showResults ? null : () {
-                      setState(() {
-                        userAnswers[index] = label;
-                      });
-                    },
+                    onTap:
+                        showResults
+                            ? null
+                            : () {
+                              setState(() {
+                                userAnswers[index] = label;
+                              });
+                            },
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: backgroundColor ?? Colors.grey[50],
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: isSelected 
-                            ? const Color(0xFF4A90E2) 
-                            : Colors.grey[300]!,
+                          color:
+                              isSelected
+                                  ? const Color(0xFF4A90E2)
+                                  : Colors.grey[300]!,
                           width: isSelected ? 2 : 1,
                         ),
                       ),
@@ -1930,11 +2268,12 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                             width: 32,
                             height: 32,
                             decoration: BoxDecoration(
-                              color: showResults && isCorrect 
-                                ? Colors.green 
-                                : isSelected 
-                                  ? const Color(0xFF4A90E2) 
-                                  : Colors.grey[300],
+                              color:
+                                  showResults && isCorrect
+                                      ? Colors.green
+                                      : isSelected
+                                      ? const Color(0xFF4A90E2)
+                                      : Colors.grey[300],
                               borderRadius: BorderRadius.circular(4),
                             ),
                             alignment: Alignment.center,
@@ -1942,9 +2281,10 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                               label,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: (showResults && isCorrect) || isSelected 
-                                  ? Colors.white 
-                                  : Colors.black87,
+                                color:
+                                    (showResults && isCorrect) || isSelected
+                                        ? Colors.white
+                                        : Colors.black87,
                               ),
                             ),
                           ),
@@ -1954,7 +2294,10 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                               text,
                               style: TextStyle(
                                 fontSize: 14,
-                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                fontWeight:
+                                    isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
                                 color: textColor,
                               ),
                             ),
@@ -1968,8 +2311,8 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                     ),
                   ),
                 );
-              }).toList(),
-              
+              }),
+
               if (showResults)
                 Container(
                   margin: const EdgeInsets.only(top: 8),
@@ -1980,7 +2323,11 @@ class _SummaryQuizResultScreenState extends State<SummaryQuizResultScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.lightbulb, color: Colors.green, size: 20),
+                      const Icon(
+                        Icons.lightbulb,
+                        color: Colors.green,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -2025,7 +2372,7 @@ class _InteractiveMindMap extends StatefulWidget {
 }
 
 class _InteractiveMindMapState extends State<_InteractiveMindMap> {
-  double _scale = 0.8;  // Start slightly zoomed out
+  double _scale = 0.8; // Start slightly zoomed out
   double _previousScale = 0.8;
   Offset _offset = Offset.zero;
   Offset _previousOffset = Offset.zero;
@@ -2033,26 +2380,27 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
   final double _maxScale = 3.0;
   bool _isInitialized = false; // Add initialization flag
 
-@override
+  @override
   void initState() {
     super.initState();
     _centerMindMap(); // Call centering method on initialization
   }
 
   void _centerMindMap() {
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (!_isInitialized && mounted) {
-      setState(() {
-        _scale = 0.8;
-        _previousScale = 0.8;
-        _offset = Offset.zero;
-        _previousOffset = Offset.zero;
-        _isInitialized = true;
-      });
-    }
-  });
-}
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isInitialized && mounted) {
+        setState(() {
+          _scale = 0.8;
+          _previousScale = 0.8;
+          _offset = Offset.zero;
+          _previousOffset = Offset.zero;
+          _isInitialized = true;
+        });
+      }
+    });
+  }
 
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -2067,8 +2415,11 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
               },
               onScaleUpdate: (details) {
                 setState(() {
-                  _scale = (_previousScale * details.scale).clamp(_minScale, _maxScale);
-                  
+                  _scale = (_previousScale * details.scale).clamp(
+                    _minScale,
+                    _maxScale,
+                  );
+
                   final currentFocal = details.focalPoint;
                   final delta = currentFocal - _previousOffset;
                   _offset += delta;
@@ -2079,14 +2430,18 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
                 scrollDirection: Axis.horizontal,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.vertical,
-                  child: Container(
-                    width: MediaQuery.of(context).size.width * 1.5, // Extra width for large mind maps
-                    height: MediaQuery.of(context).size.height * 1.5, // Extra height for large mind maps
+                  child: SizedBox(
+                    width:
+                        MediaQuery.of(context).size.width *
+                        1.5, // Extra width for large mind maps
+                    height:
+                        MediaQuery.of(context).size.height *
+                        1.5, // Extra height for large mind maps
                     child: Stack(
                       children: [
                         // Background grid
                         _buildGrid(),
-                        
+
                         // Mind map content
                         Transform.translate(
                           offset: _offset,
@@ -2129,22 +2484,25 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
                 children: [
                   _buildControlButton(
                     icon: Icons.zoom_in,
-                    onPressed: () => setState(() {
-                      _scale = (_scale + 0.2).clamp(_minScale, _maxScale);
-                    }),
+                    onPressed:
+                        () => setState(() {
+                          _scale = (_scale + 0.2).clamp(_minScale, _maxScale);
+                        }),
                   ),
                   _buildControlButton(
                     icon: Icons.zoom_out,
-                    onPressed: () => setState(() {
-                      _scale = (_scale - 0.2).clamp(_minScale, _maxScale);
-                    }),
+                    onPressed:
+                        () => setState(() {
+                          _scale = (_scale - 0.2).clamp(_minScale, _maxScale);
+                        }),
                   ),
                   _buildControlButton(
                     icon: Icons.center_focus_weak,
-                    onPressed: () => setState(() {
-                      _scale = 1.0;
-                      _offset = Offset.zero;
-                    }),
+                    onPressed:
+                        () => setState(() {
+                          _scale = 1.0;
+                          _offset = Offset.zero;
+                        }),
                   ),
                 ],
               ),
@@ -2193,17 +2551,20 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
   }
 
   Widget _buildGrid() {
-  return CustomPaint(
-    size: Size(
-      MediaQuery.of(context).size.width * 1.5,  // Reduced from 2x to 1.5x
-      MediaQuery.of(context).size.height * 1.5, // Reduced from 2x to 1.5x
-    ),
-    painter: _GridPainter(offset: _offset, scale: _scale),
-  );
-}
+    return CustomPaint(
+      size: Size(
+        MediaQuery.of(context).size.width * 1.5, // Reduced from 2x to 1.5x
+        MediaQuery.of(context).size.height * 1.5, // Reduced from 2x to 1.5x
+      ),
+      painter: _GridPainter(offset: _offset, scale: _scale),
+    );
+  }
 
-  Widget _buildControlButton({required IconData icon, required VoidCallback onPressed}) {
-    return Container(
+  Widget _buildControlButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return SizedBox(
       width: 44,
       height: 44,
       child: Material(
@@ -2229,7 +2590,8 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
             spacing: 40,
             runSpacing: 40,
             alignment: WrapAlignment.center,
-            children: node.children.map((child) => _buildMindMapTree(child)).toList(),
+            children:
+                node.children.map((child) => _buildMindMapTree(child)).toList(),
           ),
         ],
       ],
@@ -2246,16 +2608,19 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
 
   double _nodeChildrenWidth(int level) {
     switch (level) {
-      case 0: return 300;
-      case 1: return 200;
-      default: return 150;
+      case 0:
+        return 300;
+      case 1:
+        return 200;
+      default:
+        return 150;
     }
   }
 
   Widget _buildMindMapNode(MindMapNode node) {
     final color = _getNodeColor(node.level);
     final isRoot = node.level == 0;
-    
+
     return GestureDetector(
       onTap: () => _showNodeDetails(node),
       child: Container(
@@ -2294,10 +2659,7 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
               const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
                 child: Text(
                   '${node.children.length}',
                   style: TextStyle(
@@ -2317,7 +2679,7 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
   Widget _buildNodeIcon(MindMapNode node) {
     final color = _getNodeColor(node.level);
     final icon = _getNodeIcon(node.level);
-    
+
     return Container(
       padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
@@ -2330,19 +2692,27 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
 
   IconData _getNodeIcon(int level) {
     switch (level) {
-      case 0: return Icons.center_focus_strong;
-      case 1: return Icons.category;
-      case 2: return Icons.label_important;
-      default: return Icons.label;
+      case 0:
+        return Icons.center_focus_strong;
+      case 1:
+        return Icons.category;
+      case 2:
+        return Icons.label_important;
+      default:
+        return Icons.label;
     }
   }
 
   double _getNodeFontSize(int level) {
     switch (level) {
-      case 0: return 18.0;
-      case 1: return 16.0;
-      case 2: return 14.0;
-      default: return 12.0;
+      case 0:
+        return 18.0;
+      case 1:
+        return 16.0;
+      case 2:
+        return 14.0;
+      default:
+        return 12.0;
     }
   }
 
@@ -2360,46 +2730,50 @@ class _InteractiveMindMapState extends State<_InteractiveMindMap> {
   void _showNodeDetails(MindMapNode node) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(_getNodeIcon(node.level), color: _getNodeColor(node.level)),
-            SizedBox(width: 8),
-            Text('Node Details'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              node.title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: _getNodeColor(node.level),
-              ),
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  _getNodeIcon(node.level),
+                  color: _getNodeColor(node.level),
+                ),
+                SizedBox(width: 8),
+                Text('Node Details'),
+              ],
             ),
-            SizedBox(height: 12),
-            if (node.children.isNotEmpty)
-              Text(
-                'Child nodes: ${node.children.length}',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            SizedBox(height: 8),
-            Text(
-              'Level: ${node.level}',
-              style: TextStyle(color: Colors.grey[600]),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  node.title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: _getNodeColor(node.level),
+                  ),
+                ),
+                SizedBox(height: 12),
+                if (node.children.isNotEmpty)
+                  Text(
+                    'Child nodes: ${node.children.length}',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
+                SizedBox(height: 8),
+                Text(
+                  'Level: ${node.level}',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Close'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Close'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 }
@@ -2412,9 +2786,10 @@ class _GridPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.grey[300]!
-      ..strokeWidth = 0.5;
+    final paint =
+        Paint()
+          ..color = Colors.grey[300]!
+          ..strokeWidth = 0.5;
 
     final cellSize = 20.0 * scale;
 

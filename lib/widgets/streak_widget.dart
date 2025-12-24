@@ -32,7 +32,7 @@ class _StreakWidgetState extends State<StreakWidget> {
     if (_loading) {
       return Card(
         margin: EdgeInsets.all(16),
-        child: Container(
+        child: SizedBox(
           height: 120,
           child: Center(child: CircularProgressIndicator()),
         ),
@@ -143,7 +143,7 @@ class _StreakWidgetState extends State<StreakWidget> {
               Container(
                 padding: EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -157,7 +157,7 @@ class _StreakWidgetState extends State<StreakWidget> {
                     Container(
                       width: 1,
                       height: 30,
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.3),
                     ),
                     _buildStatItem(
                       '📅',
@@ -174,7 +174,7 @@ class _StreakWidgetState extends State<StreakWidget> {
               Container(
                 padding: EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
+                  color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -308,7 +308,7 @@ class MilestoneCelebrationDialog extends StatelessWidget {
             Container(
               padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
