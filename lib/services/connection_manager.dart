@@ -1,14 +1,13 @@
-// FILE: lib/services/connection_manager.dart
+// FILE: lib/services/connection_manager.dart (FIXED VERSION)
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:claudetest/services/bluetooth_mesh_service.dart';
 
-/// Manages device-to-device connections using QR codes with auto-connect
+/// FIXED: Bluetooth Connection Manager with proper QR format and device filtering
 class ConnectionManager {
   static final ConnectionManager _instance = ConnectionManager._internal();
   factory ConnectionManager() => _instance;
@@ -18,11 +17,9 @@ class ConnectionManager {
   String? _localDeviceName;
   BluetoothMeshService? _bluetoothService;
   
-  // Connection callbacks
   final StreamController<bool> _connectionController = StreamController<bool>.broadcast();
   final StreamController<String> _statusController = StreamController<String>.broadcast();
   
-  // Connected device
   BluetoothDevice? _connectedDevice;
 
   /// Initialize with Bluetooth service
@@ -31,7 +28,6 @@ class ConnectionManager {
     _localDeviceName = await _getDeviceName();
     _localDeviceId = _generateDeviceId();
     
-    // Listen to Bluetooth connection state
     if (bluetoothService.connectedDevice != null) {
       _connectedDevice = bluetoothService.connectedDevice;
       _connectionController.add(true);
@@ -41,18 +37,17 @@ class ConnectionManager {
   Future<String> _getDeviceName() async {
     try {
       if (Platform.isAndroid) {
-        return 'Android Phone';
+        return 'Android-GyaanSetu';
       } else if (Platform.isIOS) {
-        return 'iPhone';
+        return 'iPhone-GyaanSetu';
       }
-      return 'Unknown Device';
+      return 'GyaanSetu-Device';
     } catch (e) {
-      return 'My Device';
+      return 'GyaanSetu-Device';
     }
   }
 
   String _generateDeviceId() {
-    // Generate a short, memorable ID
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final randomPart = (timestamp % 10000).toString().padLeft(4, '0');
     final deviceType = Platform.isAndroid ? 'A' : 'I';
@@ -62,160 +57,187 @@ class ConnectionManager {
   /// Get local device info for QR code
   Map<String, dynamic> getLocalDeviceInfo() {
     return {
-      'type': 'gyaansetu_device',
       'deviceId': _localDeviceId,
       'deviceName': _localDeviceName,
+      'platform': Platform.isAndroid ? 'android' : 'ios',
       'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'appName': 'GyaanSetu',
     };
   }
 
-  /// Generate QR code data as JSON string
+  /// FIXED: Generate QR code data in CONSISTENT format
   String getQRCodeData() {
-    final data = getLocalDeviceInfo();
-    return json.encode(data); // Use JSON for reliable parsing
+    // Use simple pipe-separated format for reliability
+    return '$_localDeviceId|$_localDeviceName|${DateTime.now().millisecondsSinceEpoch}';
   }
 
-  /// Parse QR code data
+  /// FIXED: Parse QR code data with proper error handling
   Map<String, dynamic>? parseQRCodeData(String qrData) {
     try {
-      return json.decode(qrData) as Map<String, dynamic>;
-    } catch (e) {
-      // Try alternative parsing if JSON fails
-      try {
-        if (qrData.contains('deviceId') && qrData.contains('deviceName')) {
-          // Simple string format
-          final parts = qrData.split('|');
-          final result = <String, dynamic>{};
-          for (var part in parts) {
-            final keyValue = part.split(':');
-            if (keyValue.length == 2) {
-              result[keyValue[0]] = keyValue[1];
-            }
-          }
-          return result;
+      print('🔍 [QR] Parsing: $qrData');
+      
+      // Try pipe-separated format first (our format)
+      if (qrData.contains('|')) {
+        final parts = qrData.split('|');
+        if (parts.length >= 2) {
+          return {
+            'deviceId': parts[0],
+            'deviceName': parts[1],
+            'timestamp': parts.length > 2 ? parts[2] : DateTime.now().millisecondsSinceEpoch.toString(),
+          };
         }
-      } catch (e2) {
-        print('Failed to parse QR data: $e2');
       }
+      
+      // Try JSON format as fallback
+      if (qrData.contains('deviceId') || qrData.contains('{')) {
+        final data = json.decode(qrData) as Map<String, dynamic>;
+        return data;
+      }
+      
+      print('❌ [QR] Invalid format');
+      return null;
+    } catch (e) {
+      print('❌ [QR] Parse error: $e');
       return null;
     }
   }
 
-  /// Auto-connect to device from QR code data
-  /// Fast auto-connect to device from QR code data
-Future<bool> autoConnectFromQRCode(String qrData, BuildContext context) async {
-  try {
-    _statusController.add('🔍 Parsing QR code...');
-    
-    final deviceInfo = parseQRCodeData(qrData);
-    if (deviceInfo == null) {
-      _statusController.add('❌ Invalid QR code');
-      return false;
-    }
-    
-    final targetDeviceId = deviceInfo['deviceId']?.toString() ?? '';
-    final targetDeviceName = deviceInfo['deviceName']?.toString() ?? '';
-    
-    if (targetDeviceId.isEmpty) {
-      _statusController.add('❌ No device ID in QR code');
-      return false;
-    }
-    
-    _statusController.add('🎯 Looking for: $targetDeviceName ($targetDeviceId)');
-    
-    // STEP 1: Quick scan (3 seconds max)
-    _statusController.add('📡 Starting quick scan...');
-    
-    BluetoothDevice? foundDevice;
-    
-    // Listen for scan results directly
-    final scanSubscription = FlutterBluePlus.scanResults.listen((results) {
-      for (var result in results) {
-        final device = result.device;
-        final deviceName = device.platformName;
-        final deviceId = device.remoteId.toString();
-        
-        print('📱 Found: $deviceName ($deviceId)');
-        
-        // Simple matching - look for ANY device that could be it
-        if (deviceName.contains('GyaanSetu') || 
-            deviceName.contains('Mesh') ||
-            (targetDeviceId.length >= 3 && deviceId.contains(targetDeviceId.substring(0, 3)))) { // Match first 3 chars
-          foundDevice = device;
-          _statusController.add('✅ Found potential match: $deviceName');
-          break;
-        }
-      }
-    });
-    
-    // Start quick scan
-    await FlutterBluePlus.startScan(timeout: Duration(seconds: 3));
-    
-    // Wait for scan to complete
-    await Future.delayed(Duration(seconds: 3));
-    
-    // Stop scanning
-    await FlutterBluePlus.stopScan();
-    scanSubscription.cancel();
-    
-    // Check if device was found
-    if (foundDevice == null) {
-      _statusController.add('❌ Device not found. Try:');
-      _statusController.add('1. Ensure both devices have Bluetooth ON');
-      _statusController.add('2. Devices are within 5 meters');
-      _statusController.add('3. Other device is visible/not connected');
-      return false;
-    }
-    
-    // STEP 2: Quick connect (5 seconds max)
-   // _statusController.add('🔗 Connecting to ${foundDevice.platformName}...');
-    
+  /// FIXED: Auto-connect with proper timeout and filtering
+  Future<bool> autoConnectFromQRCode(String qrData, BuildContext context) async {
     try {
-      // Connect with timeout
-      //await foundDevice.connect(timeout: Duration(seconds: 5));
+      _statusController.add('🔍 Parsing QR code...');
       
-      // Verify connection
-      await Future.delayed(Duration(milliseconds: 500));
-      //final isConnected = await foundDevice.isConnected;
-      
-      if (isConnected) {
-        _connectedDevice = foundDevice;
-        _connectionController.add(true);
-        _statusController.add('🎉 Connected successfully!');
-        
-        return true;
-      } else {
-        _statusController.add('❌ Connection failed - not connected');
+      final deviceInfo = parseQRCodeData(qrData);
+      if (deviceInfo == null) {
+        _statusController.add('❌ Invalid QR code format');
         return false;
       }
+      
+      final targetDeviceName = deviceInfo['deviceName']?.toString() ?? '';
+      final targetDeviceId = deviceInfo['deviceId']?.toString() ?? '';
+      
+      if (targetDeviceName.isEmpty && targetDeviceId.isEmpty) {
+        _statusController.add('❌ No device info in QR code');
+        return false;
+      }
+      
+      _statusController.add('🎯 Looking for: $targetDeviceName');
+      
+      // STEP 1: Quick scan with timeout (8 seconds max)
+      _statusController.add('📡 Scanning for devices...');
+      
+      BluetoothDevice? foundDevice;
+      final completer = Completer<BluetoothDevice?>();
+      
+      // Listen for scan results
+      final scanSubscription = FlutterBluePlus.scanResults.listen((results) {
+        if (completer.isCompleted) return;
+        
+        for (var result in results) {
+          final device = result.device;
+          final deviceName = device.platformName.toLowerCase();
+          
+          print('📱 Found: $deviceName (${device.remoteId})');
+          
+          // FIXED: Better device matching
+          if (_isMatchingDevice(deviceName, targetDeviceName, targetDeviceId)) {
+            print('✅ Found matching device: $deviceName');
+            if (!completer.isCompleted) {
+              completer.complete(device);
+            }
+            break;
+          }
+        }
+      });
+      
+      // Start scan with 8 second timeout
+      await FlutterBluePlus.startScan(
+        timeout: Duration(seconds: 8),
+        androidUsesFineLocation: true,
+      );
+      
+      // Wait for device or timeout
+      try {
+        foundDevice = await completer.future.timeout(
+          Duration(seconds: 10),
+          onTimeout: () => null,
+        );
+      } catch (e) {
+        print('⏱️ Scan timeout');
+      }
+      
+      // Stop scanning
+      await FlutterBluePlus.stopScan();
+      scanSubscription.cancel();
+      
+      if (foundDevice == null) {
+        _statusController.add('❌ Device not found nearby');
+        _statusController.add('💡 Make sure other device has Bluetooth ON');
+        return false;
+      }
+      
+      // STEP 2: Connect with timeout (10 seconds max)
+      _statusController.add('🔗 Connecting to ${foundDevice.platformName}...');
+      
+      try {
+        // Attempt connection with timeout
+        await foundDevice.connect(
+          timeout: Duration(seconds: 10),
+          autoConnect: false,
+        );
+        
+        // Wait a bit for connection to stabilize
+        await Future.delayed(Duration(milliseconds: 500));
+        
+        // Verify connection
+        final isConnected = await foundDevice.isConnected;
+        
+        if (isConnected) {
+          _connectedDevice = foundDevice;
+          _connectionController.add(true);
+          _statusController.add('🎉 Connected successfully!');
+          return true;
+        } else {
+          _statusController.add('❌ Connection failed - not connected');
+          return false;
+        }
+      } on TimeoutException {
+        _statusController.add('⏱️ Connection timeout - device may be busy');
+        return false;
+      } catch (e) {
+        _statusController.add('❌ Connection error: ${e.toString()}');
+        return false;
+      }
+      
     } catch (e) {
-      _statusController.add('❌ Connection error: ${e.toString()}');
+      _statusController.add('💥 Error: ${e.toString()}');
       return false;
     }
-    
-  } catch (e) {
-    _statusController.add('💥 Error: ${e.toString()}');
-    return false;
   }
-}
 
-  /// Get all discovered devices from Bluetooth service
-  Future<List<BluetoothDevice>> _getAllDiscoveredDevices() async {
-    //final completer = Completer<List<BluetoothDevice>>();
-    final devices = <BluetoothDevice>[];
+  /// FIXED: Better device matching logic
+  bool _isMatchingDevice(String deviceName, String targetName, String targetId) {
+    final name = deviceName.toLowerCase();
+    final target = targetName.toLowerCase();
     
-    // Listen to devices stream
-    final subscription = _bluetoothService!.devicesStream.listen((deviceList) {
-      devices.clear();
-      devices.addAll(deviceList);
-    });
+    // Match by app identifier
+    if (name.contains('gyaansetu') || name.contains('mesh')) {
+      return true;
+    }
     
-    // Wait a moment for devices to populate
-    await Future.delayed(Duration(seconds: 2));
+    // Match by device name
+    if (target.isNotEmpty && name.contains(target)) {
+      return true;
+    }
     
-    subscription.cancel();
-    return devices;
+    // Match by partial ID (first 4 chars)
+    if (targetId.isNotEmpty && targetId.length >= 4) {
+      final idPrefix = targetId.substring(0, 4).toLowerCase();
+      if (name.contains(idPrefix)) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   /// Disconnect from current device
@@ -253,16 +275,16 @@ Future<bool> autoConnectFromQRCode(String qrData, BuildContext context) async {
       size: size,
       backgroundColor: Colors.white,
       errorStateBuilder: (cxt, err) {
-  return Container(
-    color: Colors.white,
-    child: Center(
-      child: Text(
-        'QR Error\n${err?.toString() ?? 'Unknown error'}',
-        textAlign: TextAlign.center,
-      ),
-    ),
-  );
-},
+        return Container(
+          color: Colors.white,
+          child: Center(
+            child: Text(
+              'QR Error\n${err?.toString() ?? 'Unknown error'}',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        );
+      },
     );
   }
   

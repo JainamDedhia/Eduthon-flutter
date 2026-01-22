@@ -1,40 +1,33 @@
-// FILE: lib/screens/student/qr_connection_screen.dart
+// FILE: lib/screens/student/quick_qr_screen.dart (FIXED VERSION)
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../../services/connection_manager.dart';
 import '../../services/bluetooth_mesh_service.dart';
+import '../../services/connection_manager.dart';
 
-class QRConnectionScreen extends StatefulWidget {
-  const QRConnectionScreen({super.key});
+class QuickConnectScreen extends StatefulWidget {
+  const QuickConnectScreen({super.key});
 
   @override
-  State<QRConnectionScreen> createState() => _QRConnectionScreenState();
+  State<QuickConnectScreen> createState() => _QuickConnectScreenState();
 }
 
-class _QRConnectionScreenState extends State<QRConnectionScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  late ConnectionManager _connectionManager;
-  late BluetoothMeshService _bluetoothService;
+class _QuickConnectScreenState extends State<QuickConnectScreen> {
+  final BluetoothMeshService _bluetoothService = BluetoothMeshService();
+  final ConnectionManager _connectionManager = ConnectionManager();
   
-  // Scanner
-  String? _scannedData;
+  String _status = '🔵 Ready to connect';
   bool _isConnecting = false;
-  String _statusMessage = '';
   bool _isConnected = false;
   
-  // Status stream
   StreamSubscription? _statusSubscription;
   StreamSubscription? _connectionSubscription;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _bluetoothService = BluetoothMeshService();
-    _connectionManager = ConnectionManager();
     _initialize();
   }
 
@@ -44,350 +37,317 @@ class _QRConnectionScreenState extends State<QRConnectionScreen> with SingleTick
     
     // Listen to status updates
     _statusSubscription = _connectionManager.statusStream.listen((message) {
-      setState(() {
-        _statusMessage = message;
-      });
+      if (mounted) {
+        setState(() {
+          _status = message;
+        });
+      }
     });
     
     // Listen to connection status
     _connectionSubscription = _connectionManager.connectionStream.listen((connected) {
-      setState(() {
-        _isConnected = connected;
-      });
+      if (mounted) {
+        setState(() {
+          _isConnected = connected;
+          if (connected) {
+            _status = '✅ Connected!';
+          }
+        });
+      }
     });
   }
 
   void _onQRCodeScanned(BarcodeCapture capture) {
+    if (_isConnecting) return; // Prevent multiple scans
+    
     final barcodes = capture.barcodes;
-    if (barcodes.isNotEmpty && !_isConnecting) {
-      final barcode = barcodes.first;
-      if (barcode.rawValue != null) {
-        setState(() {
-          _scannedData = barcode.rawValue;
-        });
-        
-        // Auto-connect to scanned device
-        _autoConnectToDevice(barcode.rawValue!);
-      }
-    }
+    if (barcodes.isEmpty) return;
+    
+    final barcode = barcodes.first;
+    if (barcode.rawValue == null) return;
+    
+    _connectToDevice(barcode.rawValue!);
   }
 
-  Future<void> _autoConnectToDevice(String qrData) async {
+  Future<void> _connectToDevice(String qrData) async {
     if (_isConnecting) return;
     
     setState(() {
       _isConnecting = true;
-      _statusMessage = 'Starting connection...';
+      _status = '🔄 Connecting...';
     });
     
-    // Auto-connect
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('Connecting to device...'),
+              SizedBox(height: 10),
+              Text(
+                'This may take a few seconds',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    
+    // Attempt connection
     final success = await _connectionManager.autoConnectFromQRCode(qrData, context);
     
     setState(() {
       _isConnecting = false;
     });
     
-    if (!success) {
-      // Show retry option
-      _showConnectionFailedDialog(qrData);
+    // Close loading dialog
+    if (mounted) {
+      Navigator.pop(context);
+    }
+    
+    if (success) {
+      // Show success and navigate back after delay
+      await Future.delayed(Duration(seconds: 2));
+      if (mounted) {
+        Navigator.pop(context, true); // Return success
+      }
     } else {
-      // Connected successfully - navigate back to main screen
-      _navigateBackWithSuccess();
+      // Show error dialog
+      _showErrorDialog();
     }
   }
 
-  void _showConnectionFailedDialog(String qrData) {
+  void _showErrorDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Connection Failed'),
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.orange),
+            SizedBox(width: 12),
+            Text('Connection Failed'),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.error, size: 50, color: Colors.orange),
-            const SizedBox(height: 16),
+            Text(_status),
+            SizedBox(height: 16),
             Text(
-              _statusMessage,
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Make sure:',
+              'Troubleshooting:',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 8),
-            const Text('• Both devices have Bluetooth ON'),
-            const Text('• Devices are within 10 meters'),
-            const Text('• Other device is in Receive mode'),
+            SizedBox(height: 8),
+            Text('• Both devices have Bluetooth ON'),
+            Text('• Devices are within 5 meters'),
+            Text('• Other device is showing its QR code'),
+            Text('• Try scanning the QR code again'),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
               Navigator.pop(context);
-              await _autoConnectToDevice(qrData);
+              // User can try scanning again
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6B46C1),
+              backgroundColor: Color(0xFF6B46C1),
             ),
-            child: const Text('Retry'),
+            child: Text('Try Again'),
           ),
         ],
       ),
     );
   }
 
-  void _navigateBackWithSuccess() {
-    // Delay to show success message
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        Navigator.pop(context, true); // Return success
-      }
-    });
-  }
-
-  String _getPlatformName() {
-    try {
-      if (Platform.isAndroid) return 'Android';
-      if (Platform.isIOS) return 'iOS';
-      return 'Unknown';
-    } catch (e) {
-      return 'Unknown';
-    }
+  String _generateQRData() {
+    return _connectionManager.getQRCodeData();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
     _statusSubscription?.cancel();
     _connectionSubscription?.cancel();
-    _connectionManager.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Text('Quick Connect'),
+        backgroundColor: Color(0xFF6B46C1),
+      ),
+      body: DefaultTabController(
+        length: 2,
+        child: Column(
           children: [
-            Text('📱 QR Connection', style: TextStyle(fontSize: 18)),
-            Text(
-              'Auto-connect to devices',
-              style: TextStyle(fontSize: 12, color: Colors.white70),
+            // Status bar
+            Container(
+              padding: EdgeInsets.all(16),
+              color: _isConnected ? Colors.green[50] : Colors.grey[100],
+              child: Row(
+                children: [
+                  _isConnecting
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          _isConnected ? Icons.check_circle : Icons.info,
+                          size: 20,
+                          color: _isConnected ? Colors.green : Colors.blue,
+                        ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _status,
+                      style: TextStyle(fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // Tabs
+            TabBar(
+              tabs: [
+                Tab(text: 'My QR', icon: Icon(Icons.qr_code)),
+                Tab(text: 'Scan QR', icon: Icon(Icons.qr_code_scanner)),
+              ],
+            ),
+            
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildMyQRTab(),
+                  _buildScanTab(),
+                ],
+              ),
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF6B46C1),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'My Code', icon: Icon(Icons.qr_code)),
-            Tab(text: 'Scan & Connect', icon: Icon(Icons.qr_code_scanner)),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildMyCodeTab(),
-          _buildScanTab(),
-        ],
       ),
     );
   }
 
-  Widget _buildMyCodeTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          // Status Banner
-          if (_isConnected)
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.shade200),
+  Widget _buildMyQRTab() {
+    final qrData = _generateQRData();
+    
+    return Center(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Show this QR code to connect',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.green),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Connected',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
-                          ),
-                        ),
-                        Text(
-                          'To: ${_connectionManager.connectedDevice?.platformName ?? 'Unknown'}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.red),
-                    onPressed: () async {
-                      await _connectionManager.disconnect();
-                    },
-                  ),
-                ],
-              ),
+              textAlign: TextAlign.center,
             ),
-          
-          // Instructions
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.auto_awesome, color: Color(0xFF6B46C1)),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Auto-Connect Feature',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF6B46C1),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    '1. Show your QR code\n'
-                    '2. Other person scans it\n'
-                    '3. Auto-connect happens\n'
-                    '4. Start sharing files instantly',
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.bluetooth, size: 20, color: Colors.blue),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'No manual connection needed!',
-                            style: TextStyle(fontSize: 13, color: Colors.blue),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // QR Code
-          Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  _connectionManager.getQRCodeWidget(size: 180),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Device Info
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        _buildInfoRow('📱 Device', _connectionManager.localDeviceName ?? 'Unknown'),
-                        const Divider(),
-                        _buildInfoRow('🆔 Device ID', _connectionManager.localDeviceId ?? 'Unknown'),
-                        const Divider(),
-                        _buildInfoRow('📱 Platform', _getPlatformName()),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: 24),
-          
-          // Connection Status
-          if (_isConnecting)
-            Column(
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 16),
-                Text(
-                  _statusMessage,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.blue),
+            
+            SizedBox(height: 32),
+            
+            // QR Code
+            Card(
+              elevation: 4,
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: QrImageView(
+                  data: qrData,
+                  size: 220,
+                  backgroundColor: Colors.white,
                 ),
-              ],
+              ),
             ),
-        ],
+            
+            SizedBox(height: 32),
+            
+            // Device Info
+            Card(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your Device Info:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 10),
+                    _buildInfoRow('Name:', _connectionManager.localDeviceName ?? 'Unknown'),
+                    _buildInfoRow('ID:', _connectionManager.localDeviceId ?? '---'),
+                    _buildInfoRow('Platform:', Platform.isAndroid ? 'Android' : 'iOS'),
+                  ],
+                ),
+              ),
+            ),
+            
+            SizedBox(height: 24),
+            
+            // Instructions
+            Card(
+              color: Colors.blue[50],
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '📋 How to connect:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 10),
+                    Text('1. Keep this QR code visible'),
+                    Text('2. Other person opens "Scan QR" tab'),
+                    Text('3. They scan your QR code'),
+                    Text('4. Wait 5-10 seconds'),
+                    Text('5. Connection complete! ✓'),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildInfoRow(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 80,
             child: Text(
               label,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 10),
           Expanded(
             child: SelectableText(
               value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+              style: TextStyle(fontFamily: 'Monospace'),
             ),
           ),
         ],
@@ -396,147 +356,73 @@ class _QRConnectionScreenState extends State<QRConnectionScreen> with SingleTick
   }
 
   Widget _buildScanTab() {
-    return Stack(
+    return Column(
       children: [
-        // Scanner
-        Column(
-          children: [
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF6B46C1), width: 2),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: MobileScanner(
-                    controller: MobileScannerController(
-                      facing: CameraFacing.back,
-                      torchEnabled: false,
-                      formats: [BarcodeFormat.qrCode],
-                    ),
-                    onDetect: _onQRCodeScanned,
-                  ),
+        // Instructions
+        Container(
+          padding: EdgeInsets.all(16),
+          color: Colors.amber[50],
+          child: Row(
+            children: [
+              Icon(Icons.qr_code_scanner, color: Colors.orange),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Point camera at the other device\'s QR code',
+                  style: TextStyle(fontSize: 14),
                 ),
               ),
-            ),
-            
-            // Bottom Panel
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Colors.grey[300]!)),
-              ),
-              child: Column(
-                children: [
-                  const Icon(Icons.qr_code_scanner, size: 40, color: Color(0xFF6B46C1)),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Scan to Auto-Connect',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Point camera at device QR code',
-                    style: TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 20),
-                  
-                  // Manual Entry Option
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      _showManualEntryDialog();
-                    },
-                    icon: const Icon(Icons.keyboard),
-                    label: const Text('Enter QR Code Manually'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      side: const BorderSide(color: Color(0xFF6B46C1)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         
-        // Status Overlay
-        if (_isConnecting)
-          Container(
-            color: Colors.black54,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const CircularProgressIndicator(color: Colors.white),
-                  const SizedBox(height: 20),
-                  Text(
-                    _statusMessage,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Auto-connecting...',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                ],
+        // Scanner
+        Expanded(
+          child: Container(
+            margin: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Color(0xFF6B46C1), width: 3),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: MobileScanner(
+                controller: MobileScannerController(
+                  facing: CameraFacing.back,
+                  torchEnabled: false,
+                ),
+                onDetect: _onQRCodeScanned,
+                fit: BoxFit.cover,
               ),
             ),
           ),
-      ],
-    );
-  }
-
-  void _showManualEntryDialog() {
-    final controller = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Enter QR Code Data'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Paste the QR code data from the other device:'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'QR Code Data',
-                border: OutlineInputBorder(),
-                hintText: '{"deviceId":"A-1234","deviceName":"Android Phone"...}',
-              ),
-            ),
-          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+        
+        // Scan tips
+        Container(
+          padding: EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Colors.grey[300]!)),
           ),
-          ElevatedButton(
-            onPressed: () {
-              final qrData = controller.text.trim();
-              if (qrData.isNotEmpty) {
-                Navigator.pop(context);
-                _autoConnectToDevice(qrData);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6B46C1),
-            ),
-            child: const Text('Connect'),
+          child: Column(
+            children: [
+              Icon(Icons.center_focus_strong, size: 40, color: Color(0xFF6B46C1)),
+              SizedBox(height: 12),
+              Text(
+                '💡 Scanning Tips',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '• Hold phone steady\n• Keep QR code centered\n• Ensure good lighting\n• Wait for auto-connect',
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

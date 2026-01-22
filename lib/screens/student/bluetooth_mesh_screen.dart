@@ -4,7 +4,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../../services/bluetooth_mesh_service.dart';
-import 'package:claudetest/screens/student/qr_connection_screen.dart';
 import 'package:claudetest/screens/student/quick_qr_screen.dart';
 
 class BluetoothMeshScreen extends StatefulWidget {
