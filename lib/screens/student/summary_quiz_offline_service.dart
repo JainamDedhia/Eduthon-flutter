@@ -27,38 +27,37 @@ class SummaryQuizOfflineService {
       builder: (context) {
         double currentGrade = 5.0;
         return StatefulBuilder(
-          builder:
-              (context, setState) => AlertDialog(
-                title: const Text('🎓 Student Level'),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Select target grade level (1-10):'),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Grade ${currentGrade.round()}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                      ),
-                    ),
-                    Slider(
-                      value: currentGrade,
-                      min: 1,
-                      max: 10,
-                      divisions: 9,
-                      label: 'Grade ${currentGrade.round()}',
-                      onChanged: (val) => setState(() => currentGrade = val),
-                    ),
-                  ],
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, currentGrade),
-                    child: const Text('Continue'),
+          builder: (context, setState) => AlertDialog(
+            title: const Text('🎓 Student Level'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Select target grade level (1-10):'),
+                const SizedBox(height: 10),
+                Text(
+                  'Grade ${currentGrade.round()}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
                   ),
-                ],
+                ),
+                Slider(
+                  value: currentGrade,
+                  min: 1,
+                  max: 10,
+                  divisions: 9,
+                  label: 'Grade ${currentGrade.round()}',
+                  onChanged: (val) => setState(() => currentGrade = val),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, currentGrade),
+                child: const Text('Continue'),
               ),
+            ],
+          ),
         );
       },
     );
@@ -69,37 +68,31 @@ class SummaryQuizOfflineService {
     if (modelAvailable) {
       selectedLanguage = await showDialog<String>(
         context: context,
-        builder:
-            (context) => AlertDialog(
-              title: const Row(
-                children: [
-                  Icon(Icons.language, color: Color(0xFF4A90E2)),
-                  SizedBox(width: 8),
-                  Text('Select Language'),
-                ],
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.language, color: Color(0xFF4A90E2)),
+              SizedBox(width: 8),
+              Text('Select Language'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '🤖 Local AI Model detected!\nChoose summary language:',
+                style: TextStyle(fontSize: 14),
+                textAlign: TextAlign.center,
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    '🤖 Local AI Model detected!\nChoose summary language:',
-                    style: TextStyle(fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
-                  const SizedBox(height: 12),
-                  _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
-                  const SizedBox(height: 12),
-                  _buildLanguageOption(
-                    context,
-                    'मराठी (Marathi)',
-                    'mr',
-                    '🇮🇳',
-                  ),
-                ],
-              ),
-            ),
+              const SizedBox(height: 20),
+              _buildLanguageOption(context, 'English', 'en', '🇬🇧'),
+              const SizedBox(height: 12),
+              _buildLanguageOption(context, 'हिंदी (Hindi)', 'hi', '🇮🇳'),
+              const SizedBox(height: 12),
+              _buildLanguageOption(context, 'मराठी (Marathi)', 'mr', '🇮🇳'),
+            ],
+          ),
+        ),
       );
 
       if (selectedLanguage == null) return;
@@ -118,61 +111,51 @@ class SummaryQuizOfflineService {
         throw Exception('Could not extract text from PDF');
       }
 
-      // Clean the text dynamically using our new WordJoiner and other rules
       print('🧹 Cleaning text...');
       final text = SummaryGenerator.cleanText(rawText);
 
-      // Detect subject
       final subject = SummaryGenerator.detectSubject(text);
       print('📚 Detected Subject: $subject');
 
-      // Estimate original grade level
       final estimatedGrade = SummaryGenerator.estimateGradeLevel(text);
-      print(
-        '📊 Estimated Text Complexity: Grade ${estimatedGrade.toStringAsFixed(1)}',
-      );
+      print('📊 Estimated Text Complexity: Grade ${estimatedGrade.toStringAsFixed(1)}');
 
       String summary;
       List<Map<String, dynamic>> quiz;
 
+      // SUMMARY: Use LLM if available, otherwise rule-based
       if (modelAvailable && selectedLanguage != null) {
-        print('🤖 [SummaryQuiz] Using local LLM model');
-
+        print('🤖 Using local LLM for summary');
         setProgress(0.4);
-        print('🤖 [SummaryQuiz] Using local LLM model');
-
-        setProgress(0.4);
+        
         final rawSummary = await LLMSummaryService.generateSummaryWithLLM(
           text: text,
           language: selectedLanguage,
         );
         summary = SummaryGenerator.cleanText(rawSummary);
-
-        setProgress(0.65);
-        quiz = await LLMSummaryService.generateQuizWithLLM(
-          summary: summary,
-          language: selectedLanguage,
-          numQuestions: 10,
-        );
       } else {
-        print(
-          '📝 [SummaryQuiz] Using rule-based generation (Grade ${selectedGrade.round()})',
-        );
-
+        print('📝 Using rule-based summary (Grade ${selectedGrade.round()})');
         setProgress(0.4);
+        
         summary = await SummaryGenerator.generateSummary(
           text,
           gradeLevel: selectedGrade,
         );
-
-        setProgress(0.65);
-        quiz = await SummaryGenerator.generateQuiz(
-          summary,
-          gradeLevel: selectedGrade,
-          numQuestions: 10,
-        );
       }
 
+      // 🎯 QUIZ: ALWAYS USE RULE-BASED (More reliable than LLM)
+      print('📝 Using rule-based quiz generation');
+      setProgress(0.65);
+      
+      quiz = await SummaryGenerator.generateQuiz(
+        summary,
+        gradeLevel: selectedGrade,
+        numQuestions: 10,
+      );
+
+      print('✅ Generated ${quiz.length} quiz questions using rule-based method');
+
+      // MIND MAP: Always rule-based
       setProgress(0.85);
       print('🧠 Generating mind map...');
 
@@ -190,15 +173,13 @@ class SummaryQuizOfflineService {
         summary,
         quiz,
       );
-      // Note: We could save subject if OfflineDB supported it,
-      // but for now we just use it for logic/logging or could inject into summary header.
 
       await OfflineDB.saveMindMap(file.classCode, file.name, mindMap.toJson());
 
       print('✅ Summary, Quiz, and Mind Map saved');
 
       if (context.mounted) {
-        final mode = modelAvailable ? 'Local AI Model' : 'Rule-Based';
+        final mode = modelAvailable ? 'Local AI Summary + Rule-Based Quiz' : 'Rule-Based';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('✅ Generated with $mode!'),

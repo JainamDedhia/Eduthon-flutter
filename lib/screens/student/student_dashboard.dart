@@ -1182,19 +1182,39 @@ Widget _buildLibraryTab() {
             SizedBox(height: 16),
             
             // Logout Button
-            ElevatedButton.icon(
-              onPressed: _handleLogout,
-              icon: Icon(Icons.logout, size: 24),
-              label: Text('Logout', style: TextStyle(fontSize: 18)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
+            // Add this Bluetooth button ABOVE the logout button:
+
+// Bluetooth Sharing Button
+ElevatedButton.icon(
+  onPressed: () => Navigator.pushNamed(context, '/student/bluetooth-mesh'),
+  icon: Icon(Icons.bluetooth),
+  label: Text('📡 Bluetooth Sharing'),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Color(0xFF4A90E2), // Blue color to match theme
+    foregroundColor: Colors.white,
+    padding: EdgeInsets.symmetric(vertical: 16),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    ),
+  ),
+),
+
+SizedBox(height: 16), // Add some spacing
+
+// Existing Logout Button (keep this as is)
+ElevatedButton.icon(
+  onPressed: _handleLogout,
+  icon: Icon(Icons.logout, size: 24),
+  label: Text('Logout', style: TextStyle(fontSize: 18)),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.red,
+    foregroundColor: Colors.white,
+    padding: EdgeInsets.symmetric(vertical: 16),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(12),
+    ),
+  ),
+),
           ],
         ),
       ),

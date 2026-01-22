@@ -17,6 +17,7 @@ import 'screens/student/summary_quiz_screen.dart';
 import 'screens/student/model_download_screen.dart';
 import 'package:claudetest/screens/student/chatbot_screen.dart';
 import 'screens/student/personal_pdf_screen.dart';
+import 'screens/student/bluetooth_mesh_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,6 +64,7 @@ class MyApp extends StatelessWidget {
   '/student/model-download': (context) => const ModelDownloadScreen(),
   '/student/chatbot': (context) => const ChatbotScreen(),
   '/student/personal-pdfs': (context) => const PersonalPdfScreen(),
+  '/student/bluetooth-mesh': (context) => const BluetoothMeshScreen(),
 },
       ),
     );

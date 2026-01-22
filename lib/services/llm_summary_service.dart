@@ -60,7 +60,7 @@ class LLMSummaryService {
   }
 
   // OPTIMIZED: Streaming generation with early stopping
-  static Future<String> _generateText({
+  static Future<String> generateText({
     required String prompt,
     required int maxTokens,
     double temperature = 0.7,
@@ -134,7 +134,7 @@ Summary:''';
 
       print('🔄 [LLM] Generating summary in one pass...');
       
-      final summary = await _generateText(
+      final summary = await generateText(
         prompt: prompt,
         maxTokens: 400, // Reduced from 600 for speed
         temperature: 0.3, // Lower temp for consistency
@@ -220,7 +220,7 @@ $limitedSummary
 
 Questions:''';
 
-      final quizText = await _generateText(
+      final quizText = await generateText(
         prompt: prompt,
         maxTokens: 800, // Increased slightly for quality
         temperature: 0.8, // Higher temp for variety
