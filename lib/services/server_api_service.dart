@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class ServerAPIService {
   // 🔥 IMPORTANT: Replace with your ngrok/localtunnel URL
-  static const String BASE_URL = "https://three-pugs-mate.loca.lt";
+  static const String BASE_URL = "https://chatty-numbers-run.loca.lt";
   
   // Request timeout
   static const Duration TIMEOUT = Duration(seconds: 30);
@@ -235,7 +235,7 @@ static Future<List<Map<String, dynamic>>> generateQuiz({
     try {
       print('💬 [ServerAPI] Sending chat message');
       print('   Model: $model');
-      print('   Message: "${message.length > 50 ? message.substring(0, 50) + '...' : message}"');
+      print('   Message: "${message.length > 50 ? '${message.substring(0, 50)}...' : message}"');
       print('   Context length: ${context.length}');
       print('   History messages: ${history.length}');
       
@@ -266,7 +266,7 @@ static Future<List<Map<String, dynamic>>> generateQuiz({
       ).timeout(Duration(seconds: 45));
       
       print('📥 [ServerAPI] Response status: ${response.statusCode}');
-      print('   Response body preview: ${response.body.length > 100 ? response.body.substring(0, 100) + '...' : response.body}');
+      print('   Response body preview: ${response.body.length > 100 ? '${response.body.substring(0, 100)}...' : response.body}');
       
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

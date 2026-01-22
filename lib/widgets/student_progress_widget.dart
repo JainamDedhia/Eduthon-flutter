@@ -176,7 +176,7 @@ class _StudentProgressWidgetState extends State<StudentProgressWidget> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: DataTable(
-        headingRowColor: MaterialStateProperty.all(const Color(0xFFE3F2FD)),
+        headingRowColor: WidgetStateProperty.all(const Color(0xFFE3F2FD)),
         border: TableBorder.all(color: Colors.grey[300]!),
         columns: const [
           DataColumn(
@@ -255,7 +255,7 @@ class _StudentProgressWidgetState extends State<StudentProgressWidget> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _getScoreColor(student.averageScore).withOpacity(0.2),
+                      color: _getScoreColor(student.averageScore).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -294,7 +294,7 @@ class _StudentProgressWidgetState extends State<StudentProgressWidget> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _getScoreColor(student.averageScore).withOpacity(0.1),
+                    color: _getScoreColor(student.averageScore).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: _getScoreColor(student.averageScore),
